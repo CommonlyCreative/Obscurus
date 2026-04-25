@@ -1,0 +1,24 @@
+{
+    "steamID": "76561198130126331",
+    "avatar": {
+        "small": "https://avatars.steamstatic.com/d0aec1c350184b57e880f6289eda675ddf5f4cab.jpg",
+        "medium": "https://avatars.steamstatic.com/d0aec1c350184b57e880f6289eda675ddf5f4cab_medium.jpg",
+        "large": "https://avatars.steamstatic.com/d0aec1c350184b57e880f6289eda675ddf5f4cab_full.jpg",
+        "hash": "d0aec1c350184b57e880f6289eda675ddf5f4cab"
+    },
+    "url": "https://steamcommunity.com/profiles/76561198130126331/",
+    "visible": true,
+    "personaState": 1,
+    "personaStateFlags": 0,
+    "allowsComments": true,
+    "nickname": "God",
+    "lastLogOffTimestamp": 1776686197,
+    "createdTimestamp": 1395101736,
+    "realName": "RASHEED WILLIS",
+    "primaryGroupID": "103582791429521408",
+    "test": {
+        "badge": 113,
+        "raw_score": 62.55105,
+        "matches_used": 30
+    }
+}

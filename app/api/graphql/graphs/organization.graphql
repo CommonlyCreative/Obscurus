@@ -1,0 +1,83 @@
+# Organization schema
+#
+# Rules:
+#   - A user can belong to at most ONE organization at a time
+#   - An org can have any number of members but only 6 core players
+#   - OrgRole.MANAGER has full control; OrgRole.PLAYER can play and receive invitations
+#   - The org owner is always a MANAGER
+#   - Core team slots (coreTeam) must be 6 PLAYER members; used as the default roster
+
+type Organization {
+    _id: ID!
+    name: String!
+    slug: String!                       # Lowercase, URL-safe, unique — used for search
+    description: String
+    logo: String
+    owner: User!                        # Always OrgRole.MANAGER
+    members: [OrganizationMember!]!     # All active + invited members
+    coreTeam: [User!]!                  # Up to 6 designated starting players
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+# Junction type between a user and an organization
+type OrganizationMember {
+    user: User!
+    orgRole: OrgRole!
+    status: OrgMemberStatus!
+    joinedAt: Timestamp!
+}
+
+# Organization-level roles (distinct from platform Role in profile.graphql)
+enum OrgRole {
+    MANAGER     # Schedules scrimmages, manages roster, assigns subs, invites members
+    PLAYER      # Active playing member; eligible for core team and org-sub slots
+}
+
+enum OrgMemberStatus {
+    ACTIVE
+    INACTIVE
+    INVITED     # Pending acceptance of org membership invitation
+}
+
+input CreateOrganizationInput {
+    name: String!
+    slug: String!
+    description: String
+    logo: String
+}
+
+input UpdateOrganizationInput {
+    name: String
+    description: String
+    logo: String
+}
+
+extend type Query {
+    getUserOrgInvitations(user_id: String!): [Organization]!
+    searchOrganizations(query: String!, limit: Int): [Organization!]!
+    getOrganization(org_id: String!): Organization
+    getOrganizations: [Organization!]
+    getOrganizationBySlug(slug: String!): Organization
+    getOrganizationMembers(org_id: String!): [OrganizationMember!]!
+}
+
+extend type Mutation {
+    # Org lifecycle (only users with platform Role.MEMBER+ can create an org)
+    createOrganization(owner_id: String!, input: CreateOrganizationInput!): Organization
+    updateOrganization(org_id: String!, input: UpdateOrganizationInput!): Organization
+    deleteOrganization(org_id: String!): Boolean
+    transferOwnership(org_id: String!, new_owner_id: String!): Organization
+
+    # Membership — manager-only operations
+    inviteMember(org_id: String!, user_id: String!, orgRole: OrgRole!): OrganizationMember
+    acceptOrgInvite(org_id: String!, user_id: String!): OrganizationMember
+    declineOrgInvite(org_id: String!, user_id: String!): Boolean
+    removeMember(org_id: String!, user_id: String!): Boolean
+    updateMemberRole(org_id: String!, user_id: String!, orgRole: OrgRole!): OrganizationMember
+
+    # Core team — manager-only; max 6 slots; must be active PLAYER members of this org
+    setCoreTeam(org_id: String!, user_ids: [String!]!): Organization
+    addCorePlayer(org_id: String!, user_id: String!): Organization
+    removeCorePlayer(org_id: String!, user_id: String!): Organization
+}

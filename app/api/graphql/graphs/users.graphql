@@ -1,0 +1,106 @@
+# User schema
+#
+# User IS the Better Auth user document — no separate profiles collection.
+# The _id is the Better Auth user ID. All fields are stored as additionalFields
+# on the user document in the "user" collection.
+
+type User {
+    _id: ID!                    # Better Auth user ID — the single source of identity
+    online: Boolean!
+    name: String!
+    verified: Boolean!          # Maps to emailVerified on the Better Auth user document
+    role: Role!                 # Platform-level role
+    mmr: Int!                   # MMR value; use getRankByMMR(mmr) to get Rank + division
+    heroes: [Int!]!          # Hero IDs from lib/deadlock.ts (e.g. "infernus", "yamato")
+    bio: String                 # Player bio / about text
+    balance: Balance!
+    steam: Steam
+    region: String              # Player region (e.g. "NA", "EU", "ASIA")
+    organization: Organization  # The one org this player belongs to; null if none
+    scrimmages: [Scrimmage!]!   # Scrimmage history (resolved via scrimmage_ids)
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+type Steam {
+    id: String!
+    username: String!
+    avatar: String!
+}
+
+# Stripe billing record linked to a user
+type Customer {
+    _id: ID!
+    user: User!
+    stripeCustomerId: String!
+    isOnboarded: Boolean!
+    email: String
+    name: String
+    billingAddress: String
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+# Credit balance for a user (all amounts in credits; 100 credits = $1 USD)
+type Balance {
+    credits: Int!       # Spendable credits
+    pending: Int!       # Credits locked in active wagers
+    winnings: Int!      # All-time earnings in credits
+}
+
+# Platform-level roles (separate from OrgRole defined in organization.graphql)
+enum Role {
+    ADMIN
+    MODERATOR
+    SUPPORT
+    MEMBER
+}
+
+input UserInput {
+    mmr: Int
+    heroes: [Int!]
+    bio: String
+}
+
+input UpdateUserInput {
+    online: Boolean
+    verified: Boolean
+    role: Role
+    mmr: Int
+    heroes: [Int!]
+    bio: String
+    balance: BalanceInput
+    steam: SteamInput
+}
+
+input SteamInput {
+    id: String
+    username: String
+    avatar: String
+}
+
+input BalanceInput {
+    credits: Int
+    pending: Int
+    winnings: Int
+}
+
+input CustomerInput {
+    user_id: String!
+    stripeCustomerId: String!
+}
+
+extend type Query {
+    getUsers: [User!]!
+    getUser(user_id: String!): User
+    hasUser(user_id: String): Boolean!
+    getCustomer(user_id: String!): Customer
+    getUserBySteamId(steam_id: String!): User
+}
+
+extend type Mutation {
+    createUser(input: UserInput!): User
+    updateUser(user_id: String!, input: UpdateUserInput!): User
+    setOnlineStatus(user_id: String!, online: Boolean!): User
+    createCustomer(input: CustomerInput!): Customer
+}

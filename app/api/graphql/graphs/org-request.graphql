@@ -1,0 +1,41 @@
+# Organization creation requests — separate from live orgs
+#
+# Rules:
+#   - A user may have at most ONE pending request at a time
+#   - Admins review and approve/reject via reviewOrgRequest
+#   - Approval does NOT auto-create the org; admin creates it separately
+
+type OrgRequest {
+    _id: ID!
+    user: User!
+    name: String!           # Proposed organization name
+    slug: String!           # 5-char max abbreviation (slug)
+    reason: String          # Optional justification from the requester
+    status: OrgRequestStatus!
+    reviewNote: String      # Optional note left by the reviewing admin
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+enum OrgRequestStatus {
+    PENDING
+    APPROVED
+    REJECTED
+}
+
+input SubmitOrgRequestInput {
+    name: String!
+    slug: String!
+    reason: String
+}
+
+extend type Query {
+    getMyOrgRequest(user_id: String!): OrgRequest
+    getOrgRequests(status: OrgRequestStatus): [OrgRequest!]!
+}
+
+extend type Mutation {
+    submitOrgRequest(user_id: String!, input: SubmitOrgRequestInput!): OrgRequest
+    cancelOrgRequest(request_id: String!, user_id: String!): Boolean
+    reviewOrgRequest(request_id: String!, status: OrgRequestStatus!, reviewNote: String): OrgRequest
+}

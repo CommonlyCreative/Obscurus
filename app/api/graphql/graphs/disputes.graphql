@@ -1,0 +1,5 @@
+type Disputes {
+    _id: ID!
+    scrimmage: Scrimmage!
+    creator: User
+}

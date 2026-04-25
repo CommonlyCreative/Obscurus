@@ -1,0 +1,108 @@
+# Wager & Credit schema
+# Works alongside transactions.graphql (which handles raw Stripe payment records).
+#
+# Credit denomination: 100 credits = $1.00 USD
+#
+# Wager rules:
+#   - wagerAmount is set on the Scrimmage by the host
+#   - Each TEAM LEADER puts up wagerAmount credits (not each player)
+#   - Total pot = wagerAmount × 2
+#   - Winning leader receives the full pot (wagerAmount × 2)
+#   - If cancelled, both leaders are refunded in full
+#   - A leader must have >= wagerAmount spendable credits to accept/create a wagered match
+#   - Credits are locked (moved to Balance.pending) when the match goes ACTIVE
+
+type Wager {
+    _id: ID!
+    scrimmage: Scrimmage!
+    leader: User!                    # The team leader placing this wager
+    side: MatchSide!                 # HOST or OPPONENT
+    amount: Int!                     # Credits locked (equals scrimmage.wagerAmount)
+    status: WagerStatus!
+    settledAt: Timestamp                   # Timestamp of payout or refund
+    createdAt: Timestamp!
+}
+
+# Every credit movement on a user's account.
+# Provides a full ledger: purchases, locks, payouts, refunds, and admin adjustments.
+type CreditTransaction {
+    _id: ID!
+    user: User!
+    type: CreditTxType!
+    amount: Int!                     # Positive = credits added; negative = credits deducted
+    balanceAfter: Int!               # User's spendable credits after this transaction
+    wager: Wager                     # Linked wager if this is a wager-related movement
+    stripeTransaction: Transaction   # Linked Stripe record if this is a purchase
+    note: String
+    createdAt: Timestamp!
+}
+
+# Record of a credit purchase made through Stripe.
+# Creates both a Transaction (Stripe side) and a CreditTransaction (credit ledger side).
+type CreditPurchase {
+    _id: ID!
+    user: User!
+    credits: Int!                    # Credits added to balance
+    amountPaidCents: Int!            # Amount charged in USD cents via Stripe
+    stripeTransaction: Transaction!
+    creditTransaction: CreditTransaction!
+    createdAt: Timestamp!
+}
+
+enum MatchSide {
+    HOST
+    OPPONENT
+}
+
+enum WagerStatus {
+    LOCKED      # Credits reserved in Balance.pending; match not yet complete
+    WON         # Winning leader received wagerAmount × 2 credits
+    LOST        # Credits already locked; no additional deduction on loss
+    REFUNDED    # Credits returned to leader (match was cancelled)
+}
+
+enum CreditTxType {
+    PURCHASE        # Credits bought with real money via Stripe
+    WAGER_LOCK      # Credits moved to pending when leader accepts a wagered match
+    WAGER_WIN       # Full pot (wagerAmount × 2) credited to winning leader
+    WAGER_REFUND    # wagerAmount returned when a wagered match is cancelled
+    ADMIN_ADJUST    # Manual correction applied by a platform admin
+}
+
+input PurchaseCreditsInput {
+    user_id: String!
+    credits: Int!               # Must be a multiple of 100 (100 credits = $1)
+    payment_method_id: String!  # Stripe payment method ID
+}
+
+input PlaceWagerInput {
+    scrimmage_id: String!
+    leader_id: String!          # Must be the team leader for the given side
+    side: MatchSide!
+}
+
+extend type Query {
+    getWager(wager_id: String!): Wager
+    getScrimmageWagers(scrimmage_id: String!): [Wager!]!
+    getUserWagers(user_id: String!): [Wager!]!
+    getCreditTransactions(user_id: String!, limit: Int): [CreditTransaction!]!
+    getCreditBalance(user_id: String!): Int!
+    getCreditPurchases(user_id: String!): [CreditPurchase!]!
+}
+
+extend type Mutation {
+    # Triggered by the Stripe webhook after a successful payment
+    purchaseCredits(input: PurchaseCreditsInput!): CreditPurchase
+
+    # Called internally when both leaders have confirmed a wagered match
+    # Locks wagerAmount credits from the leader's spendable balance into pending
+    placeWager(input: PlaceWagerInput!): Wager
+
+    # Called internally after result is confirmed (both leaders agree or admin decides)
+    # Pays out winner's leader and marks the loser's wager as LOST
+    # On CANCELLED scrimmage: refunds both leaders
+    settleWagers(scrimmage_id: String!): [Wager!]!
+
+    # Admin only — manual credit correction with a required audit note
+    adjustCredits(user_id: String!, amount: Int!, note: String!): CreditTransaction
+}

@@ -1,0 +1,9 @@
+# Unix milliseconds — serialized as Int over the wire, typed semantically as a timestamp
+scalar Timestamp
+
+type Query {
+    _empty: String
+}
+type Mutation {
+    _empty: String
+}

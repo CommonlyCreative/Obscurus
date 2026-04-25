@@ -1,0 +1,290 @@
+# Scrimmage schema
+#
+# Lifecycle:
+#   Public (non-scheduled):
+#     OPEN → (joinScrimmage) → READY → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
+#
+#   Private (non-scheduled):
+#     PENDING → (acceptScrimmageChallenge) → READY → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
+#     PENDING → (declineScrimmageChallenge) → CANCELLED
+#
+#   Scheduled (public or private):
+#     OPEN/PENDING → (accept) → SCHEDULING → (setOpponentRoster confirms) → SCHEDULED
+#                → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
+#
+# Match flow (within ACTIVE):
+#   Host must set partyCode (setPartyCode) before starting the first match.
+#   Scheduled scrimmages may defer the party code until game day.
+#   Host calls startMatch → a new Match is appended (startedAt set, no result yet).
+#   After the in-game match ends, host calls submitMatchResult with the Deadlock match_id + result.
+#   The system tallies wins; if a series victor is determined → status COMPLETED, result set.
+#   If the series is not decided and bestOf allows, the host may startMatch again.
+#   Either leader can call endScrimmage at any point to end early (→ CANCELLED).
+#
+# Wager flow:
+#   Both team leaders must each have >= wagerAmount credits when match becomes ACTIVE.
+#   Credits are locked via placeWager (wager.graphql). On COMPLETED the winning
+#   leader receives wagerAmount × 2. On CANCELLED both leaders are refunded.
+
+type Scrimmage {
+    _id: ID!
+    host: User!                              # The user who posted the scrimmage
+    hostOrg: Organization                    # Org the host represents; null = unaffiliated
+    hostTeam: Team!                          # Host's 6-player lineup
+    opponentOrg: Organization                # Opposing org; null until opponent joins/accepts
+    opponentTeam: Team                       # Opponent lineup; null until they set roster
+    note: String                             # Host's message ("6v6, no smurf pls")
+    status: ScrimmageStatus!
+    result: ScrimmageResult                  # Overall series result; set when COMPLETED
+    bestOf: BestOf!
+    region: String!
+    draftLink: String
+    isPrivate: Boolean!                      # true = directed at targetOrg only
+    scheduledAt: Timestamp                   # Unix ms; null = ASAP
+    wagerAmount: Int!                        # Credits each leader puts up (0 = no wager)
+    partyCode: String                        # Party code players use to join the host lobby
+    readyHost: Boolean!                      # Host leader has confirmed ready
+    readyOpponent: Boolean!                  # Opponent leader has confirmed ready
+    matches: [Match!]!                       # All matches in this series, in order
+    invitations: [ScrimmageInvitation!]!     # Per-player RSVPs for scheduled matches
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+# A single game within a scrimmage series
+type Match {
+    number: Int!             # Series index starting at 1 (Match 1, Match 2, …)
+    match_id: String         # Deadlock in-game match ID; submitted by host after the game ends
+    result: MatchResult      # Null while the game is in progress
+    startedAt: Timestamp!          # Unix ms when the host called startMatch
+    concludedAt: Timestamp         # Unix ms when the host submitted the result
+}
+
+enum BestOf {
+    ONE,
+    THREE,
+    FIVE,
+    UNLIMITED,
+}
+
+# A 6-player side in a scrimmage
+type Team {
+    name: String
+    leader: User!
+    members: [User!]!   # All 6 players including the leader
+}
+
+# Tracks each player's RSVP for a scheduled scrimmage.
+# Created for every member of both teams when scheduledAt is set.
+# Substitutes can be users outside the org (flexibility for managers).
+type ScrimmageInvitation {
+    _id: ID!
+    scrimmage: Scrimmage!
+    user: User!
+    side: MatchSide!                # Which team this invitation is for
+    status: InvitationStatus!
+    substitute: User                # Manager-assigned replacement if this player declines
+    respondedAt: Timestamp
+    createdAt: Timestamp!
+}
+
+# "Looking for Substitute" posting for a scheduled scrimmage.
+# Posted by a manager when a roster slot opens up.
+# Visible on the LFS page; any user (including non-org) can apply.
+type SubstituteRequest {
+    _id: ID!
+    scrimmage: Scrimmage!
+    organization: Organization!
+    replacing: User!
+    postedBy: User!                 # Manager posting the request
+    side: MatchSide!                # Which team needs the sub
+    note: String                    # Requirements (e.g. "need flex player, Archon+")
+    status: SubRequestStatus!
+    applicants: [SubApplicant!]!
+    filledBy: User                  # The applicant selected by the manager
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+# A user applying to fill a SubstituteRequest
+type SubApplicant {
+    _id: ID!
+    request: SubstituteRequest!
+    user: User!
+    message: String
+    status: ApplicantStatus!
+    appliedAt: Timestamp!
+}
+
+enum ScrimmageStatus {
+    OPEN        # Public; waiting for any opponent to join
+    PENDING     # Private; waiting for targetOrg to accept or decline
+    READY       # Both teams confirmed; waiting for both leaders to ready up
+    SCHEDULING  # Scheduled match accepted; both teams finalizing rosters
+    SCHEDULED   # Scheduled; rosters confirmed, waiting for game day
+    ACTIVE      # Live; matches are being played
+    COMPLETED   # Series finished with a confirmed result
+    CANCELLED
+}
+
+# Overall series result — set on the Scrimmage when status → COMPLETED
+enum ScrimmageResult {
+    HOST_WIN
+    OPPONENT_WIN
+    DRAW        # All matches played, equal wins on both sides
+    CANCELLED
+}
+
+# Per-match result — set on a Match after the game concludes
+enum MatchResult {
+    HOST_WIN
+    OPPONENT_WIN
+    DRAW
+    CANCELLED
+}
+
+enum InvitationStatus {
+    PENDING
+    ACCEPTED
+    DECLINED
+}
+
+enum MatchSide {
+    HOST
+    OPPONENT
+}
+
+enum SubRequestStatus {
+    OPEN
+    FILLED
+    CANCELLED
+}
+
+enum ApplicantStatus {
+    PENDING     # Awaiting manager review
+    SELECTED    # Chosen as the substitute
+    REJECTED
+}
+
+input CreateScrimmageInput {
+    hostOrg_id: String
+    team: [String!]!             # Host roster: exactly 6 user IDs
+    note: String
+    host_id: String!
+    isPrivate: Boolean!
+    opponentOrg_id: String         # Required when isPrivate = true
+    scheduledAt: Timestamp             # Omit for ASAP scrimmages
+    wagerAmount: Int             # Credits; 0 or omit = no wager
+    bestOf: BestOf               # Defaults to ONE
+    partyCode: String            # May be provided upfront for ASAP scrimmages
+    invitations: [ScrimmageInvitationInput!]
+}
+
+input ScrimmageInvitationInput {
+    user_id: String!
+    side: MatchSide!
+}
+
+input UpdateScrimmageInput {
+    note: String
+    scheduledAt: Timestamp
+    wagerAmount: Int
+}
+
+# Used by the opponent manager to submit their 6-player roster after accepting a scheduled match
+input SetOpponentRosterInput {
+    scrimmage_id: String!
+    org_id: String!
+    team: [String!]!             # Exactly 6 user IDs
+}
+
+# Manager swaps one unavailable player for another in-place.
+# Both remove_id and replace_id are required — you cannot leave a slot empty.
+input UpdateRosterSlotInput {
+    scrimmage_id: String!
+    side: MatchSide!
+    remove_id: String!
+    replace_id: String!
+}
+
+input RespondToInvitationInput {
+    invitation_id: String!
+    status: InvitationStatus!   # ACCEPTED or DECLINED only
+    team: TeamInput
+}
+
+# A 6-player side in a scrimmage
+input TeamInput {
+    name: String
+    leader: String!
+    members: [String!]!   # All 6 players including the leader
+}
+
+input SubstituteRequestInput {
+    scrimmage_id: String!
+    org_id: String!
+    side: MatchSide!
+    note: String
+}
+
+extend type Query {
+    getScrimmages(status: ScrimmageStatus, limit: Int): [Scrimmage!]!
+    getScrimmage(scrimmage_id: String!): Scrimmage
+    getPublicScrimmages(limit: Int): [Scrimmage!]!
+    getOrgScrimmages(org_id: String!): [Scrimmage!]
+    getUserScrimmages(user_id: String!): [Scrimmage!]!
+    getScrimmageInvitations(user_id: String!): [ScrimmageInvitation!]!
+
+    # LFS page queries
+    getSubstituteRequests(status: SubRequestStatus, limit: Int): [SubstituteRequest!]!
+    getSubstituteRequest(request_id: String!): SubstituteRequest
+    getOrgSubstituteRequests(org_id: String!): [SubstituteRequest!]!
+}
+
+
+extend type Mutation {
+    createScrimmage(input: CreateScrimmageInput!): Scrimmage
+    updateScrimmage(scrimmage_id: String!, input: UpdateScrimmageInput!): Scrimmage
+    cancelScrimmage(scrimmage_id: String!): Scrimmage
+
+    # Public scrimmage: opponent org joins or leaves before a match starts
+    joinScrimmage(scrimmage_id: String!, org_id: String, team: [String!]!): Scrimmage
+    leaveScrimmage(scrimmage_id: String!): Scrimmage
+
+    # Private scrimmage: targetOrg accepts or declines the challenge
+    acceptScrimmageChallenge(scrimmage_id: String!, org_id: String!): Scrimmage
+    declineScrimmageChallenge(scrimmage_id: String!, org_id: String!): Scrimmage
+
+    # Scheduled scrimmage: opponent sets their roster (during SCHEDULING phase)
+    setOpponentRoster(input: SetOpponentRosterInput!): Scrimmage
+
+    # In-place roster swap — manager removes unavailable player and fills the slot immediately
+    updateRosterSlot(input: UpdateRosterSlotInput!): Scrimmage
+
+    # Player RSVP for scheduled scrimmages
+    respondToInvitation(input: RespondToInvitationInput!): ScrimmageInvitation
+
+    # Manager assigns a substitute for a user who declined
+    assignSubstitute(invitation_id: String!, substitute_id: String!): ScrimmageInvitation
+
+    # Ready up — both leaders must call this to consent before ACTIVE begins
+    readyUp(scrimmage_id: String!, side: MatchSide!): Scrimmage
+    unready(scrimmage_id: String!, side: MatchSide!): Scrimmage
+
+    # Party code — host sets this; required before startMatch can be called
+    setPartyCode(scrimmage_id: String!, partyCode: String!): Scrimmage
+
+    # Match lifecycle — host only
+    startMatch(scrimmage_id: String!): Scrimmage
+    cancelMatch(scrimmage_id: String!): Scrimmage
+    submitMatchResult(scrimmage_id: String!, match_number: Int!, deadlock_match_id: String!, result: MatchResult!): Scrimmage
+
+    # End the scrimmage early — available to either leader when no match is in progress
+    endScrimmage(scrimmage_id: String!): Scrimmage
+
+    # LFS mutations
+    createSubstituteRequest(input: SubstituteRequestInput!): SubstituteRequest
+    cancelSubstituteRequest(request_id: String!): SubstituteRequest
+    applyToSubstituteRequest(request_id: String!, message: String): SubApplicant
+    selectSubstitute(request_id: String!, user_id: String!): SubstituteRequest
+}

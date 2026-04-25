@@ -1,0 +1,2 @@
+schema: 'app/api/graphql/graphs/'
+documents: ["./lib/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"]

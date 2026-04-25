@@ -1,0 +1,134 @@
+import { auth, User } from "@/lib/database/auth";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { grafbase } from "@/lib/database/grafbase";
+import { graphql } from "../../../api/graphql/types";
+import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
+import { EditProfileForm, OrgUserSearch } from "@/components/profile/EditProfileForm";
+import { DisconnectSteamButton } from "@/components/profile/DisconnectSteamButton";
+import { cn } from "@/lib/utils";
+import Image from "next/image";
+import { getHeroes } from "@/lib/actions/deadlockapi";
+
+const EditProfilePageQuery = graphql(`
+  query EditProfilePage($user_id: String!) {
+    getUser(user_id: $user_id) {
+      _id
+      name
+      mmr
+      heroes
+      bio
+      region
+      steam {
+        id
+        username
+        avatar
+      }
+      organization {
+        _id
+        name
+        owner {
+          _id
+        }
+        members {
+          user { _id name mmr }
+          orgRole
+          status
+        }
+        coreTeam { _id name mmr }
+      }
+    }
+    getUsers {
+        _id
+        name
+        organization {
+            _id
+            name
+        }
+    }
+  }
+`);
+
+
+
+export default async function EditProfilePage({ params }: { params: Promise<{ id: string }> }) {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) redirect("/");
+
+    const user = session.user as User
+    const profileId = await params.then(p => p.id);
+
+    if (user.id !== profileId) redirect(`/profile/${profileId}`);
+
+    const { getUser: profile, getUsers: allUsers } = await grafbase.request(EditProfilePageQuery, { user_id: profileId });
+    if (!profile) redirect("/");
+
+    const org = profile.organization ?? null;
+
+    const myMembership = org?.members.find(
+        (m) => m.user._id === user.id && m.status === OrgMemberStatus.Active
+    ) ?? null;
+    const isManager = myMembership?.orgRole === OrgRole.Manager;
+
+    const activeMembers = org?.members
+        .filter((m) => m.status === OrgMemberStatus.Active)
+        .map((m) => ({ _id: m.user._id, name: m.user.name, mmr: m.user.mmr, orgRole: m.orgRole })) ?? [];
+
+    const coreTeamIds: string[] = org?.coreTeam.map((u) => u._id) ?? [];
+
+    const steam = profile.steam ?? null;
+
+    const heroes = await getHeroes();
+
+    const users = allUsers.reduce((acc, user) => {
+        if (org?.members.some(u => u.user._id === user._id))return acc;
+        let index = acc.findIndex(u => (!user.organization && u.organization === "No organization") || (user.organization && u.organization !== "No organization" && u.organization._id === user.organization._id));
+        
+        if (index === -1) {
+            index = acc.length
+            acc.push({ organization: user.organization ?? "No organization", items: [] })
+        }
+        
+        const element = acc.at(index)
+        
+        if (element){
+            element.items.push(user)
+
+            acc[index] = {
+                organization: element.organization,
+                items: element.items
+            }
+        }
+
+        return acc;
+    }, [] as OrgUserSearch)
+
+    return (
+        <main className="flex-1">
+            <div className={cn("mx-auto px-4 sm:px-6 lg:px-8 py-10", org ? "max-w-6xl" : "max-w-3xl")}>
+                <div className="mb-8">
+                    <h1 className="text-2xl font-bold text-foreground">Edit Profile</h1>
+                    <p className="text-sm text-muted mt-1">Update your player information and preferences.</p>
+                </div>
+
+                <EditProfileForm
+                    userId={profileId}
+                    users={users.sort((a,b) => a.organization === "No organization" ? -1 : b.organization === "No organization" ? 1 : 0)}
+                    steam={steam}
+                    initialMmr={profile.mmr}
+                    initialHeroes={profile.heroes}
+                    initialBio={profile.bio ?? ""}
+                    heroes={heroes.filter(hero => !hero.in_development&&!hero.disabled).sort((a, b) => a.name.localeCompare(b.name))}
+                    org={org ? {
+                        _id: org._id,
+                        name: org.name,
+                        ownerId: org.owner._id,
+                        members: activeMembers,
+                        coreTeamIds,
+                    } : null}
+                    isManager={isManager}
+                />
+            </div>
+        </main>
+    );
+}

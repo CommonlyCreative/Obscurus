@@ -1,0 +1,230 @@
+# Transactions schema
+# Covers Stripe payment records, raw webhook event logs, and refund adjustments.
+# 100 credits = $1 USD — see graphs/ai/wager.graphql for the credit system.
+#
+# IMPORTANT: The enum formerly named Status has been renamed to TransactionStatus
+# to prevent a naming conflict with the Status enum in scrimmages.graphql.
+# The resolver must reference TransactionStatus (generated type) instead of Status.
+
+# ---------------------------------------------------------------------------
+# Core transaction record
+# One Transaction is created per Stripe charge (DEPOSIT) or payout (PAYOUT).
+# ---------------------------------------------------------------------------
+type Transaction {
+    _id: ID!
+    customer: Customer                      # Linked Stripe customer; null for guests
+    type: TransactionType!
+    method: TransactionMethod               # Payment method snapshot at time of charge
+    status: TransactionStatus!
+    livemode: Boolean!                      # true = production, false = Stripe test mode
+    description: String                     # Stripe charge description
+    subtotal: Int                           # Pre-tax, pre-discount amount in cents
+    tax: Int                                # Tax in cents
+    discount: Int                           # Discount applied in cents
+    total: Int                              # Final amount charged in cents
+    currency: String                        # ISO 4217 e.g. "usd"
+    receiptUrl: String                      # Stripe-hosted receipt URL
+    refunded: Boolean                       # true if partially or fully refunded
+    refundedAmount: Int                     # Total amount refunded so far in cents
+    failureCode: String                     # Stripe failure_code e.g. "card_declined"
+    failureMessage: String                  # Human-readable failure reason
+    fingerprint: ID                         # Stripe card fingerprint for fraud detection
+    stripeEventId: String                   # The StripeEvent._id that created this record
+    stripePaymentIntentId: String
+    stripeChargeId: String
+    stripeBalanceTransactionId: String
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+    processedAt: Timestamp                        # Null until successfully processed by our system
+}
+
+# ---------------------------------------------------------------------------
+# Refund record
+# One Adjustment is created per Stripe refund. A Transaction may have multiple
+# Adjustments (partial refunds issued over time).
+# ---------------------------------------------------------------------------
+type Adjustment {
+    _id: ID!
+    transaction: Transaction!
+    stripeRefundId: String!
+    amount: Int!                            # Amount refunded in cents
+    reason: RefundReason
+    processor: Processor
+    status: TransactionStatus!
+    failureMessage: String
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+# ---------------------------------------------------------------------------
+# Stripe webhook event log
+# Every inbound webhook is written here immediately on receipt (before processing).
+# The stripeEventId is used for idempotency — duplicate deliveries are IGNORED.
+# ---------------------------------------------------------------------------
+type StripeEvent {
+    _id: ID!
+    stripeEventId: ID!                      # Stripe event ID e.g. "evt_1ABC..."
+    eventType: String!                      # e.g. "payment_intent.succeeded"
+    apiVersion: String!                     # Stripe API version from webhook header
+    livemode: Boolean!
+    relatedTransaction: Transaction         # Internal Transaction linked to this event
+    payloadHash: String!                    # SHA-256 of raw payload — detects replay attacks
+    receivedAt: Timestamp!                        # Unix ms when our server received the webhook
+    processedAt: Timestamp                        # Unix ms when processing completed; null if pending
+    processingStatus: EventProcessingStatus!
+    retryCount: Int!                        # Processing attempts so far
+    errorMessage: String                    # Last error if processingStatus = FAILED
+}
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+enum TransactionStatus {
+    PENDING         # Awaiting Stripe confirmation
+    SUCCESSFUL      # Charge confirmed by Stripe
+    FAILED          # Charge failed
+    REFUNDED        # Partially or fully refunded
+    DISPUTED        # Chargeback opened by cardholder
+}
+
+enum TransactionType {
+    DEPOSIT         # User purchases credits via Stripe
+    PAYOUT          # Platform pays out to user (future: withdrawals)
+}
+
+enum TransactionMethodType {
+    CARD
+    BANK
+    WALLET          # Apple Pay, Google Pay, Link, etc.
+}
+
+enum CardFunding {
+    CREDIT
+    DEBIT
+    PREPAID
+    UNKNOWN
+}
+
+enum Processor {
+    SYSTEM
+    ADMIN
+    USER
+}
+
+enum RefundReason {
+    DUPLICATE
+    FRAUDULENT
+    CUSTOMER_REQUEST
+    MATCH_CANCELLED     # Wager refund because the scrimmage was cancelled
+}
+
+enum EventProcessingStatus {
+    RECEIVED            # Webhook written to DB; handler not yet invoked
+    PROCESSING          # Handler is currently running
+    PROCESSED           # Handler completed successfully
+    FAILED              # Handler threw; will be retried up to a max attempt count
+    IGNORED             # Valid event type but no action required (e.g. idempotent re-delivery)
+}
+
+# ---------------------------------------------------------------------------
+# Object types
+# ---------------------------------------------------------------------------
+
+type TransactionMethod {
+    type: TransactionMethodType
+    last4: Int
+    brand: String           # e.g. "visa", "mastercard", "amex"
+    funding: CardFunding
+    country: String         # ISO 3166-1 alpha-2 card-issuing country
+    expMonth: Int
+    expYear: Int
+}
+
+# ---------------------------------------------------------------------------
+# Inputs
+# ---------------------------------------------------------------------------
+
+input TransactionMethodInput {
+    type: TransactionMethodType
+    last4: Int
+    brand: String
+    funding: CardFunding
+    country: String
+    expMonth: Int
+    expYear: Int
+}
+
+input TransactionInput {
+    customer: String
+    type: TransactionType
+    method: TransactionMethodInput
+    status: TransactionStatus
+    livemode: Boolean
+    description: String
+    subtotal: Int
+    tax: Int
+    discount: Int
+    total: Int
+    currency: String
+    receiptUrl: String
+    refunded: Boolean
+    refundedAmount: Int
+    failureCode: String
+    failureMessage: String
+    fingerprint: ID
+    stripeEventId: String
+    stripePaymentIntentId: String
+    stripeChargeId: String
+    stripeBalanceTransactionId: String
+    processedAt: Timestamp
+    createdAt: Timestamp!
+    updatedAt: Timestamp!
+}
+
+input UpdateTransactionInput {
+    status: TransactionStatus
+    receiptUrl: String
+    refunded: Boolean
+    refundedAmount: Int
+    failureCode: String
+    failureMessage: String
+    processedAt: Timestamp
+}
+
+input LogStripeEventInput {
+    stripeEventId: String!
+    eventType: String!
+    apiVersion: String!
+    livemode: Boolean!
+    payloadHash: String!
+}
+
+# ---------------------------------------------------------------------------
+# Queries & Mutations
+# NOTE: logTransaction fixes the original logTransation typo.
+#       Update the resolver key accordingly: logTransation → logTransaction
+# ---------------------------------------------------------------------------
+
+extend type Query {
+    getTransactions: [Transaction!]!
+    getTransaction(transaction_id: String!): Transaction
+    getCustomerTransactions(customer_id: String!): [Transaction!]!
+    getStripeEvent(stripe_event_id: String!): StripeEvent
+}
+
+extend type Mutation {
+    logTransaction(transaction: TransactionInput!): Transaction
+    updateTransaction(transaction_id: String!, input: UpdateTransactionInput!): Transaction
+
+    # Called by the Stripe webhook handler on receipt (before processing)
+    logStripeEvent(input: LogStripeEventInput!): StripeEvent
+
+    # Called by the webhook handler after it finishes processing (success or failure)
+    updateStripeEvent(
+        stripe_event_id: String!
+        status: EventProcessingStatus!
+        related_transaction_id: String
+        errorMessage: String
+    ): StripeEvent
+}

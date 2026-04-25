@@ -1,0 +1,18 @@
+overwrite: true
+schema: "./app/api/graphql/graphs/"
+documents: ["./lib/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"]
+generates:
+  app/api/graphql/types/:
+    preset: "client"
+    config:
+      scalars:
+        Timestamp: number
+  app/api/graphql/server.ts:
+    plugins:
+      - "typescript"
+      - "typescript-resolvers"
+    config:
+      useIndexSignature: true
+      contextType: "./route#Context"
+      scalars:
+        Timestamp: number
