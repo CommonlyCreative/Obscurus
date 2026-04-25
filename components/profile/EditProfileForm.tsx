@@ -326,7 +326,7 @@ export function EditProfileForm({
                         <DisconnectSteamButton userId={userId} />
                     ) : (
                         <a
-                            href={"http://localhost:3001/auth/steam"}
+                            href={`${process.env.NEXT_PUBLIC_SOCKET_URL}/auth/steam`}
                             className="px-3 py-1.5 text-xs font-semibold rounded border border-edge text-dimmed hover:border-primary/30 hover:text-foreground transition-colors"
                         >
                             Connect Steam
