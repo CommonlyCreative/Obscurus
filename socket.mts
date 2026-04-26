@@ -7,13 +7,13 @@ import SteamAuth from "node-steam-openid";
 import cors from 'cors';
 
 const HOST = process.env.HOSTNAME
-const PORT = process.env.SOCKET_PORT || 3001;
+const PORT = process.env.SOCKET_PORT;
 const CLIENT_PORT = process.env.PORT;
 
 const url = `${HOST}:${PORT}`;
 
 const steam = new SteamAuth({
-    realm: url, // Site name displayed to users on logon
+    realm: HOST ?? 'http://localhost', // Site name displayed to users on logon
     returnUrl: `${url}/auth/steam/authenticate`, // Your return route
     apiKey: String(process.env.STEAM_API_KEY), // Steam API key
 });
@@ -21,13 +21,13 @@ const steam = new SteamAuth({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: `*` }))
+app.use(cors({ origin: `${HOST}:${CLIENT_PORT}` }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: `*`,
+        origin: `${HOST}:${CLIENT_PORT}`,
         methods: ["GET", "POST"],
     },
 });
@@ -260,7 +260,7 @@ function setupScrimSocket(_io: Server, socket: Socket) {
 }
 
 httpServer.listen(PORT, () => {
-    console.log(`Socket.IO server running on ${url}`);
+    console.log(`Socket.IO server running on port ${PORT}`);
 });
 
 const createFillerMember: (name: string) => LiveMember = (name: string) => ({

@@ -34,8 +34,6 @@ export function TeamPanel({
     const [nameInput, setNameInput] = useState("");
     const { data: session } = authClient.useSession();
 
-    console.log("TEAMS", teams)
-
     const user = session?.user;
     const maxSize = team?.maxSize ?? 6;
     const members = team?.members ?? [];
