@@ -8,7 +8,6 @@ import cors from 'cors';
 
 const HOST = process.env.HOSTNAME
 const PORT = process.env.SOCKET_PORT;
-const CLIENT_PORT = process.env.PORT;
 
 const url = `${HOST}:${PORT}`;
 
@@ -21,13 +20,13 @@ const steam = new SteamAuth({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: `${HOST}:${CLIENT_PORT}` }))
+app.use(cors({ origin: `${HOST}` }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: `${HOST}:${CLIENT_PORT}`,
+        origin: `${HOST}`,
         methods: ["GET", "POST"],
     },
 });
@@ -50,13 +49,6 @@ app.get("/auth/steam/authenticate", async (req, res) => {
         console.error("Error", error);
     }
 });
-
-// app.get("/cors", async (req, res) => {
-//     const link: string | undefined = req.query.link?.toString();
-//     if (!link)return;
-
-//     return res.send(await fetch(decodeURI(link)))
-// });
 
 const connectedUsers: Record<string, string> = {}; // userId → socketId
 const socketUsers = new Map<string, string>();      // socketId → userId
