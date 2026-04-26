@@ -7,7 +7,7 @@ import SteamAuth from "node-steam-openid";
 import cors from 'cors';
 
 const HOST = process.env.HOSTNAME
-const PORT = process.env.SOCKET_PORT;
+const PORT = process.env.SOCKET_PORT || 3001;
 const CLIENT_PORT = process.env.PORT;
 
 const url = `${HOST}:${PORT}`;
@@ -21,13 +21,13 @@ const steam = new SteamAuth({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: `${HOST}:${CLIENT_PORT}` }))
+app.use(cors({ origin: `*` }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: `${HOST}:${CLIENT_PORT}`,
+        origin: `*`,
         methods: ["GET", "POST"],
     },
 });
