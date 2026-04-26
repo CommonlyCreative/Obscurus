@@ -21,13 +21,13 @@ const steam = new SteamAuth({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: `${HOST}:${CLIENT_PORT}` }))
+app.use(cors({ origin: [`${HOST}:${CLIENT_PORT}`, HOST ?? "http://localhost"] }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: `${HOST}:${CLIENT_PORT}`,
+        origin: [`${HOST}:${CLIENT_PORT}`, HOST ?? "http://localhost"],
         methods: ["GET", "POST"],
     },
 });
