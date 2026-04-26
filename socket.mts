@@ -1,107 +1,123 @@
 import express from "express";
-import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import { LiveMember, LiveTeam } from "./lib/socket/teams.js";
 import 'dotenv/config'
 import SteamAuth from "node-steam-openid";
+import { createServer } from "node:http"
 import cors from 'cors';
+import next from 'next';
 
-const HOST = process.env.HOSTNAME
-const PORT = process.env.SOCKET_PORT;
-const CLIENT_PORT = process.env.PORT;
+interface ScrimPatch {
+    status: string;
+    result: string | null;
+    readyHost: boolean;
+    readyOpponent: boolean;
+    partyCode: string | null;
+    matches: Array<{
+        number: number;
+        match_id: string | null;
+        result: string | null;
+        startedAt: number;
+        concludedAt: number | null;
+    }>;
+}
 
-const url = `${HOST}:${PORT}`;
+const hostname = process.env.HOSTNAME || "localhost";
+const port = parseInt(process.env.PORT || "3000", 10);
+const serverPort = parseInt(process.env.SOCKET_PORT || "3001", 10);
+
+const url = `${hostname}:${port}`;
 
 const steam = new SteamAuth({
-    realm: HOST ?? 'http://localhost', // Site name displayed to users on logon
+    realm: hostname, // Site name displayed to users on logon
     returnUrl: `${url}/auth/steam/authenticate`, // Your return route
     apiKey: String(process.env.STEAM_API_KEY), // Steam API key
 });
 
-
-const app = express();
-app.use(express.json());
-app.use(cors({ origin: `${HOST}:${CLIENT_PORT}` }))
-
-const httpServer = createServer(app);
-
-const io = new Server(httpServer, {
-    cors: {
-        origin: `${HOST}:${CLIENT_PORT}`,
-        methods: ["GET", "POST"],
-    },
-});
-
-app.get("/auth/steam", async (req, res) => {
-    const redirectUrl = await steam.getRedirectUrl();
-    return res.redirect(redirectUrl);
-});
-
-app.get("/auth/steam/authenticate", async (req, res) => {
-    try {
-        const user = await steam.authenticate(req);
-
-        const avatar = user.avatar.large ? user.avatar.large : user.avatar.medium ? user.avatar.medium : user.avatar.small;
-
-        const queryString = new URLSearchParams({ steamId: user.steamid, username: user.username, avatar }).toString();
-
-        return res.redirect(process.env.BETTER_AUTH_URL + "/api/steam?" + queryString);
-    } catch (error) {
-        console.error("Error", error);
-    }
-});
-
-// app.get("/cors", async (req, res) => {
-//     const link: string | undefined = req.query.link?.toString();
-//     if (!link)return;
-
-//     return res.send(await fetch(decodeURI(link)))
-// });
-
+const dev = process.env.NODE_ENV !== 'production'
+const app = next({ dev, hostname, port })
+const handle = app.getRequestHandler()
 const connectedUsers: Record<string, string> = {}; // userId → socketId
 const socketUsers = new Map<string, string>();      // socketId → userId
 const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>(); // userId → cleanup timer
 
 const TEAM_GRACE_PERIOD_MS = 30_000;
-
-io.on("connection", (socket: Socket) => {
-    console.log("Client connected:", socket.id);
-
-    socket.on("login", (userId: string) => {
-        if (!userId) return;
-
-        if (socket.id === connectedUsers[userId]) return;
-
-        if (connectedUsers[userId]) {
-            console.log(`User ${userId} already connected, disconnecting old socket`);
-            io.sockets.sockets.get(connectedUsers[userId])?.disconnect();
-            delete connectedUsers[userId];
-        }
-
-        console.log(`User ${userId} joining room`);
-        connectedUsers[userId] = socket.id;
-        socketUsers.set(socket.id, userId);
-        socket.join(`user:${userId}`);
-
-        const pending = disconnectTimers.get(userId);
-        if (pending) {
-            clearTimeout(pending);
-            disconnectTimers.delete(userId);
-        }
-    });
-
-    setupTeamSocket(io, socket);
-    setupScrimSocket(io, socket);
-
-    socket.on("disconnect", () => {
-        console.log("Client disconnected:", socket.id);
-        const userId = socketUsers.get(socket.id);
-        if (userId) delete connectedUsers[userId];
-        socketUsers.delete(socket.id);
-    });
-});
-
 const liveTeams = new Map<string, LiveTeam>();
+
+app.prepare().then(() => {
+    const server = express();
+    server.use(express.json());
+    server.use(cors())
+
+    const httpServer = createServer(handle);
+    const io = new Server(httpServer);
+
+    server.get("/auth/steam", async (req, res) => {
+        const redirectUrl = await steam.getRedirectUrl();
+        return res.redirect(redirectUrl);
+    });
+
+    server.get("/auth/steam/authenticate", async (req, res) => {
+        try {
+            const user = await steam.authenticate(req);
+
+            const avatar = user.avatar.large ? user.avatar.large : user.avatar.medium ? user.avatar.medium : user.avatar.small;
+
+            const queryString = new URLSearchParams({ steamId: user.steamid, username: user.username, avatar }).toString();
+
+            return res.redirect(process.env.BETTER_AUTH_URL + "/api/steam?" + queryString);
+        } catch (error) {
+            console.error("Error", error);
+        }
+    });
+
+    httpServer.listen(port, () => {
+      console.log(`> NextJS is running in ${process.env.NODE_ENV} mode on ${hostname}:${port}`)
+    })
+
+    server.listen(serverPort, () => {
+      console.log(`> Server is running in ${process.env.NODE_ENV} mode on ${hostname}:${serverPort}`)
+    })
+
+
+    io.on("connection", (socket: Socket) => {
+        console.log("Client connected:", socket.id);
+
+        socket.on("login", (userId: string) => {
+            if (!userId) return;
+
+            if (socket.id === connectedUsers[userId]) return;
+
+            if (connectedUsers[userId]) {
+                console.log(`User ${userId} already connected, disconnecting old socket`);
+                io.sockets.sockets.get(connectedUsers[userId])?.disconnect();
+                delete connectedUsers[userId];
+            }
+
+            console.log(`User ${userId} joining room`);
+            connectedUsers[userId] = socket.id;
+            socketUsers.set(socket.id, userId);
+            socket.join(`user:${userId}`);
+
+            const pending = disconnectTimers.get(userId);
+            if (pending) {
+                clearTimeout(pending);
+                disconnectTimers.delete(userId);
+            }
+        });
+
+        setupTeamSocket(io, socket);
+        setupScrimSocket(io, socket);
+
+        socket.on("disconnect", () => {
+            console.log("Client disconnected:", socket.id);
+            const userId = socketUsers.get(socket.id);
+            if (userId) delete connectedUsers[userId];
+            socketUsers.delete(socket.id);
+        });
+    });
+
+});
 
 function broadcastTeamUpdate(io: Server, leaderId: string) {
     const team = liveTeams.get(leaderId) ?? null;
@@ -226,21 +242,6 @@ export function setupTeamSocket(
     });
 }
 
-interface ScrimPatch {
-    status: string;
-    result: string | null;
-    readyHost: boolean;
-    readyOpponent: boolean;
-    partyCode: string | null;
-    matches: Array<{
-        number: number;
-        match_id: string | null;
-        result: string | null;
-        startedAt: number;
-        concludedAt: number | null;
-    }>;
-}
-
 function setupScrimSocket(_io: Server, socket: Socket) {
     socket.on("scrim:subscribe", (scrimmageId: string) => {
         socket.join(`scrim:${scrimmageId}`);
@@ -258,10 +259,6 @@ function setupScrimSocket(_io: Server, socket: Socket) {
         socket.broadcast.to(`scrim:${scrimmageId}`).emit("scrim:refresh");
     });
 }
-
-httpServer.listen(PORT, () => {
-    console.log(`Server running on ${HOST}:${PORT}`);
-});
 
 const createFillerMember: (name: string) => LiveMember = (name: string) => ({
     name,
