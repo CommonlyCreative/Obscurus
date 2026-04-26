@@ -260,7 +260,7 @@ function setupScrimSocket(_io: Server, socket: Socket) {
 }
 
 httpServer.listen(PORT, () => {
-    console.log(`Socket.IO server running on port ${PORT}`);
+    console.log(`Server running on ${HOST}:${PORT}`);
 });
 
 const createFillerMember: (name: string) => LiveMember = (name: string) => ({
