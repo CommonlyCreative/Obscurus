@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run dev:socket",
+    "dev": "concurrently \"npm:dev:next\" \"npm:dev:socket\"",
     "dev:next": "next dev",
     "dev:socket": "NODE_OPTIONS='--loader ts-node/esm --trace-warnings --trace-deprecation --no-warnings' ts-node socket.mts",
     "build": "next build",
-    "start": "npm run start:socket",
+    "start": "concurrently \"npm:start:next\" \"npm:start:socket\"",
     "start:next": "next start",
     "start:socket": "NODE_OPTIONS='--loader ts-node/esm --no-warnings' ts-node socket.mts",
     "lint": "eslint",
