@@ -4,11 +4,12 @@ import { db } from "@/lib/database/mongo";
 import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { ObjectId } from "mongodb";
-import { Role } from "@/app/api/graphql/server";
+import { Notification, Role } from "@/app/api/graphql/server";
 import { revalidatePath } from "next/cache";
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
-import { OrgRequestStatus } from "@/app/api/graphql/types/graphql";
+import { NotificationType, OrgRequestStatus, SendNotificationMutation } from "@/app/api/graphql/types/graphql";
+import { SendNotificationM } from "@/lib/shared-graphs";
 
 // ─── GraphQL mutations ─────────────────────────────────────────────────────
 
@@ -539,6 +540,50 @@ export async function updateUserDataAction(
         .updateOne({ _id: new ObjectId(userId) }, { $set: update });
     revalidatePath("/admin/users");
 }
+
+export async function sendNotificationAdminAction(
+    recipientId: string,
+    title: string,
+    description: string,
+    link?: string,
+): Promise<SendNotificationMutation["addNotification"]> {
+    const { session } = await requireRole([Role.Admin, Role.Moderator, Role.Support]);
+    const { addNotification: notification } = await grafbase.request(SendNotificationM, {
+        input: {
+            recipient: recipientId,
+            type: NotificationType.General,
+            title: title.trim(),
+            description: description.trim(),
+            senderName: session.user.name,
+            ...(link?.trim() ? { link: link.trim() } : {}),
+        },
+    });
+    return notification;
+}
+
+export async function sendNotificationAction({recipientId, type, title, senderName, description, actionId, link} :{
+    recipientId: string,
+    type: NotificationType,
+    senderName: string,
+    title: string,
+    description?: string,
+    actionId?: string,
+    link?: string,
+}): Promise<SendNotificationMutation["addNotification"]> {
+    const { addNotification: notification } = await grafbase.request(SendNotificationM, {
+        input: {
+            recipient: recipientId,
+            type,
+            title: title.trim(),
+            description: description?.trim(),
+            senderName,
+            actionId,
+            ...(link?.trim() ? { link: link.trim() } : {}),
+        },
+    });
+    return notification;
+}
+
 
 // ─── Feedback (continued) ─────────────────────────────────────────────────
 

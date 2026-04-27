@@ -25,7 +25,7 @@ export function LiveTeamPicker({
     onSelect: (leaderId: string) => void;
 }) {
     // const { teams: allTeams, loading, refresh } = useLiveTeams();
-    const { teams: allTeams, loading} = useTeamSocket(["all"])
+    const { teams: allTeams, loading} = useTeamSocket("all")
     const orgs = unfilteredOrgs ? unfilteredOrgs.filter(o => o.coreTeam.length === 6 && o._id !== org?._id) : [];
     const teams: LiveTeam[] = Object.values(allTeams).filter(team => team !== null).filter(team => team.leaderId !== userId);
     const displayOrgs = isManager&&orgAffiliated&&orgs && orgs.length > 0;

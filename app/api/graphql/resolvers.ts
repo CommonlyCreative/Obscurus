@@ -388,6 +388,14 @@ export const resolvers: Resolvers = {
     // Mutations
     // =========================================================================
     Mutation: {
+        // --- Notifications ---
+        addNotification: async (_, { input }, { dataSources: { notifications } }) => {
+            const notification = await notifications.addNotification(input);
+            return { ...notification, _id: notification._id.toString() };
+        },
+        dismissNotification: async (_, { notification_id, user_id }, { dataSources: { notifications } }) => {
+            return await notifications.dismissNotification(notification_id, user_id);
+        },
         // --- Users ---
         createUser: (_, { input }, { dataSources: { users } }) => {
             return users.createUser(input) as any as User;

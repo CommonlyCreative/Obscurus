@@ -14,11 +14,13 @@ import {
     banUserAction,
     unbanUserAction,
     adminCancelScrimmageAction,
+    sendNotificationAdminAction,
     UserDetail,
     UserFeedbackItem,
     UserScrimItem,
     UserEditableData,
 } from "@/app/admin/actions";
+import { socket } from "@/lib/socket/socket-client";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -202,6 +204,113 @@ function EditDataForm({ user, onDone }: { user: UserDetail; onDone: () => void }
 
             <Button size="sm" disabled={pending} onClick={save} className="w-full">
                 {pending ? "Saving..." : "Save Changes"}
+            </Button>
+        </div>
+    );
+}
+
+// ─── Send notification ───────────────────────────────────────────────────────
+
+function SendNotificationForm({ userId }: { userId: string }) {
+    const [open, setOpen] = useState(false);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [link, setLink] = useState("");
+    const [pending, start] = useTransition();
+    const [sent, setSent] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const inp = "w-full bg-surface border border-edge rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary/50 transition-colors";
+
+    function reset() {
+        setTitle("");
+        setDescription("");
+        setLink("");
+        setSent(false);
+        setError(null);
+    }
+
+    function send() {
+        if (!title.trim() || !description.trim()) return;
+        setError(null);
+        setSent(false);
+        start(async () => {
+            try {
+                const notification = await sendNotificationAdminAction(userId, title, description, link || undefined);
+                reset();
+                setSent(true);
+                setTimeout(() => setSent(false), 3000)
+                socket.emit("notify", notification)
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to send.");
+            }
+        });
+    }
+
+    if (!open) {
+        return (
+            <button
+                onClick={() => setOpen(true)}
+                className="text-xs text-muted hover:text-foreground transition-colors flex items-center gap-1"
+            >
+                <span>▸</span> Send notification
+            </button>
+        );
+    }
+
+    return (
+        <div className="space-y-2.5">
+            <button
+                onClick={() => { setOpen(false); reset(); }}
+                className="text-xs text-muted hover:text-foreground transition-colors flex items-center gap-1"
+            >
+                <span>▾</span> Send notification
+            </button>
+            <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Title</label>
+                <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Account Warning"
+                    className={inp}
+                />
+            </div>
+            <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Description</label>
+                <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Notification body..."
+                    rows={3}
+                    className={inp + " resize-none"}
+                />
+            </div>
+            <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">
+                    Link <span className="normal-case text-muted">(optional)</span>
+                </label>
+                <input
+                    value={link}
+                    onChange={(e) => setLink(e.target.value)}
+                    placeholder="/scrims/abc123"
+                    className={inp}
+                />
+            </div>
+            {sent && (
+                <p className="text-xs text-success bg-success/10 border border-success/20 rounded px-3 py-2">
+                    Notification sent.
+                </p>
+            )}
+            {error && (
+                <p className="text-xs text-danger bg-danger/10 border border-danger/20 rounded px-3 py-2">{error}</p>
+            )}
+            <Button
+                size="sm"
+                disabled={pending || !title.trim() || !description.trim()}
+                onClick={send}
+                className="w-full"
+            >
+                {pending ? "Sending..." : "Send"}
             </Button>
         </div>
     );
@@ -475,6 +584,10 @@ export function UserDetailPanel({ userId, adminRole }: { userId: string; adminRo
                         <div>
                             <p className="text-xs text-dimmed mb-1.5 font-medium">Account Status</p>
                             <BanCard user={detail} onDone={refresh} />
+                        </div>
+                        <div>
+                            <p className="text-xs text-dimmed mb-1.5 font-medium">Notification</p>
+                            <SendNotificationForm userId={detail._id} />
                         </div>
                     </div>
                 </Section>

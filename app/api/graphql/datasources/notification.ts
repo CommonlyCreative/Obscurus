@@ -1,21 +1,7 @@
 import { Collection, ObjectId } from "mongodb";
+import { Notification, SendNotificationInput } from "../server";
 
-export enum NotificationType {
-    Invitation = "INVITATION",
-    General    = "GENERAL",
-}
-
-export type DBNotification = {
-    _id: ObjectId;
-    recipient: string;   // user _id
-    type: NotificationType;
-    title: string;
-    description: string;
-    link?: string;
-    actionId?: string;
-    senderName: string;
-    createdAt: number;
-};
+export type DBNotification = Omit<Notification, "_id"> & { _id: ObjectId };
 
 export class NotificationDataSource {
     private collection: Collection<DBNotification>;
@@ -28,15 +14,7 @@ export class NotificationDataSource {
         return this.collection.find({ recipient: user_id }).sort({ createdAt: -1 }).toArray();
     }
 
-    async sendNotification(input: {
-        recipient: string;
-        type: NotificationType;
-        title: string;
-        description: string;
-        link?: string | null;
-        actionId?: string | null;
-        senderName: string;
-    }): Promise<DBNotification> {
+    async addNotification(input: SendNotificationInput): Promise<DBNotification> {
         const notification: DBNotification = {
             _id: new ObjectId(),
             recipient: input.recipient,

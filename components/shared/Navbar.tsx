@@ -7,11 +7,12 @@ import { Button } from "@/components/shared/Button";
 import { authClient } from "@/lib/database/auth-client";
 import ConnectDiscordButton from "./ConnectDiscordButton";
 import { User } from "@/lib/database/auth";
-import { useTeamSocket } from "@/hooks/useTeamSocket";
+import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { socket } from "@/lib/socket/socket-client";
 import { getUserScrimmages } from "@/app/actions";
 import { ScrimmageStatus } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
+import { NotificationDropdown } from "./NotificationDropdown";
 
 function HamburgerIcon({ open }: { open: boolean }) {
     return (
@@ -34,7 +35,7 @@ export function Navbar() {
 
     const user = session?.user as User | undefined;
     const { teams } = useTeamSocket(user ? [user.id] : []);
-    const team = user ? teams[user.id] : undefined;
+    const team = user ? findTeam(teams, user.id) : undefined;
     const teamCount = team ? team.members.length : 0;
     const teamFull = teamCount === 6;
 
@@ -59,7 +60,7 @@ export function Navbar() {
                 s => s.status !== ScrimmageStatus.Completed && s.status !== ScrimmageStatus.Cancelled
             ));
         });
-    }, [user?.id]);
+    }, [user]);
 
     async function handleSignOut() {
         await authClient.signOut();
@@ -114,7 +115,8 @@ export function Navbar() {
                     </div>
 
                     {/* ── Right actions + Mobile hamburger ── */}
-                    <div className="col-start-3 flex items-center justify-end">
+                    <div className="col-start-3 flex items-center justify-end gap-3">
+                        {user && <NotificationDropdown userId={user.id} />}
                         <div className="hidden md:flex items-center gap-2">
                             {user ? (
                                 <>

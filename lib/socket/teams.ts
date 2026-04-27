@@ -3,7 +3,7 @@ import { socket } from "./socket-client";
 export interface LiveMember {
     userId: string;
     name: string;
-    role: string;
+    status: "INVITED" | "JOINED";
     mmr: number;
 }
 
@@ -17,7 +17,7 @@ export interface LiveTeam {
 export const createFillerMember: (name: string) => LiveMember  = (name: string) => ({
         name,
         mmr: 1,
-        role: "Fill",
+        status: "JOINED",
         userId: name+"-id"
     })
 

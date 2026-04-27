@@ -192,6 +192,7 @@ export type Mutation = {
   acceptOrgInvite?: Maybe<OrganizationMember>;
   acceptScrimmageChallenge?: Maybe<Scrimmage>;
   addCorePlayer?: Maybe<Organization>;
+  addNotification?: Maybe<Notification>;
   adjustCredits?: Maybe<CreditTransaction>;
   applyToSubstituteRequest?: Maybe<SubApplicant>;
   assignSubstitute?: Maybe<ScrimmageInvitation>;
@@ -222,7 +223,6 @@ export type Mutation = {
   respondToInvitation?: Maybe<ScrimmageInvitation>;
   reviewOrgRequest?: Maybe<OrgRequest>;
   selectSubstitute?: Maybe<SubstituteRequest>;
-  sendNotification?: Maybe<Notification>;
   setCoreTeam?: Maybe<Organization>;
   setOnlineStatus?: Maybe<User>;
   setOpponentRoster?: Maybe<Scrimmage>;
@@ -258,6 +258,11 @@ export type MutationAcceptScrimmageChallengeArgs = {
 export type MutationAddCorePlayerArgs = {
   org_id: Scalars['String']['input'];
   user_id: Scalars['String']['input'];
+};
+
+
+export type MutationAddNotificationArgs = {
+  input: SendNotificationInput;
 };
 
 
@@ -430,11 +435,6 @@ export type MutationSelectSubstituteArgs = {
 };
 
 
-export type MutationSendNotificationArgs = {
-  input: SendNotificationInput;
-};
-
-
 export type MutationSetCoreTeamArgs = {
   org_id: Scalars['String']['input'];
   user_ids: Array<Scalars['String']['input']>;
@@ -542,7 +542,7 @@ export type Notification = {
   _id: Scalars['ID']['output'];
   actionId?: Maybe<Scalars['String']['output']>;
   createdAt: Scalars['Timestamp']['output'];
-  description: Scalars['String']['output'];
+  description?: Maybe<Scalars['String']['output']>;
   link?: Maybe<Scalars['String']['output']>;
   recipient: Scalars['String']['output'];
   senderName: Scalars['String']['output'];
@@ -900,7 +900,7 @@ export enum ScrimmageStatus {
 
 export type SendNotificationInput = {
   actionId?: InputMaybe<Scalars['String']['input']>;
-  description: Scalars['String']['input'];
+  description?: InputMaybe<Scalars['String']['input']>;
   link?: InputMaybe<Scalars['String']['input']>;
   recipient: Scalars['String']['input'];
   senderName: Scalars['String']['input'];
@@ -1142,6 +1142,7 @@ export type User = {
   _id: Scalars['ID']['output'];
   balance: Balance;
   bio?: Maybe<Scalars['String']['output']>;
+  blockInvites?: Maybe<Scalars['Boolean']['output']>;
   createdAt: Scalars['Timestamp']['output'];
   heroes: Array<Scalars['Int']['output']>;
   mmr: Scalars['Int']['output'];
@@ -1459,6 +1460,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   acceptOrgInvite?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationAcceptOrgInviteArgs, 'org_id' | 'user_id'>>;
   acceptScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationAcceptScrimmageChallengeArgs, 'org_id' | 'scrimmage_id'>>;
   addCorePlayer?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddCorePlayerArgs, 'org_id' | 'user_id'>>;
+  addNotification?: Resolver<Maybe<ResolversTypes['Notification']>, ParentType, ContextType, RequireFields<MutationAddNotificationArgs, 'input'>>;
   adjustCredits?: Resolver<Maybe<ResolversTypes['CreditTransaction']>, ParentType, ContextType, RequireFields<MutationAdjustCreditsArgs, 'amount' | 'note' | 'user_id'>>;
   applyToSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubApplicant']>, ParentType, ContextType, RequireFields<MutationApplyToSubstituteRequestArgs, 'request_id'>>;
   assignSubstitute?: Resolver<Maybe<ResolversTypes['ScrimmageInvitation']>, ParentType, ContextType, RequireFields<MutationAssignSubstituteArgs, 'invitation_id' | 'substitute_id'>>;
@@ -1489,7 +1491,6 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   respondToInvitation?: Resolver<Maybe<ResolversTypes['ScrimmageInvitation']>, ParentType, ContextType, RequireFields<MutationRespondToInvitationArgs, 'input'>>;
   reviewOrgRequest?: Resolver<Maybe<ResolversTypes['OrgRequest']>, ParentType, ContextType, RequireFields<MutationReviewOrgRequestArgs, 'request_id' | 'status'>>;
   selectSubstitute?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationSelectSubstituteArgs, 'request_id' | 'user_id'>>;
-  sendNotification?: Resolver<Maybe<ResolversTypes['Notification']>, ParentType, ContextType, RequireFields<MutationSendNotificationArgs, 'input'>>;
   setCoreTeam?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationSetCoreTeamArgs, 'org_id' | 'user_ids'>>;
   setOnlineStatus?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationSetOnlineStatusArgs, 'online' | 'user_id'>>;
   setOpponentRoster?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetOpponentRosterArgs, 'input'>>;
@@ -1513,7 +1514,7 @@ export type NotificationResolvers<ContextType = Context, ParentType extends Reso
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   actionId?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
-  description?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   link?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   recipient?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   senderName?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
@@ -1723,6 +1724,7 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   balance?: Resolver<ResolversTypes['Balance'], ParentType, ContextType>;
   bio?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  blockInvites?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   heroes?: Resolver<Array<ResolversTypes['Int']>, ParentType, ContextType>;
   mmr?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;

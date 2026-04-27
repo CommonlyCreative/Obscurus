@@ -138,7 +138,7 @@ export function UsersPanel({
             </div>
 
             {/* ── Right: detail panel ── */}
-            <div className="bg-surface border border-edge rounded-xl overflow-hidden max-h-[70vh] overflow-y-auto sticky top-4">
+            <div className="bg-surface border border-edge rounded-xl overflow-hidden max-h-[70vh] overflow-y-auto no-scrollbar sticky top-4">
                 {selectedId ? (
                     <UserDetailPanel userId={selectedId} adminRole={adminRole} />
                 ) : (

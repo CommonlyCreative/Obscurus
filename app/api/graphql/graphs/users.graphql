@@ -18,6 +18,7 @@ type User {
     region: String              # Player region (e.g. "NA", "EU", "ASIA")
     organization: Organization  # The one org this player belongs to; null if none
     scrimmages: [Scrimmage!]!   # Scrimmage history (resolved via scrimmage_ids)
+    blockInvites: Boolean
     createdAt: Timestamp!
     updatedAt: Timestamp!
 }

@@ -38,7 +38,7 @@ export default async function RootLayout({
                         {children}
                     </div>
                     <Footer />
-                    <Notification userId={session?.user.id} />
+                    <Notification />
                     <Toaster />
                 </TooltipProvider>
             </body>

@@ -2,6 +2,7 @@ import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { ProfileOrgInvites } from "@/components/profile/ProfileOrgInvites";
 import { ProfileScrimInvites } from "@/components/profile/ProfileScrimInvites";
+import { ProfileTeamInvite } from "@/components/profile/ProfileTeamInvite";
 import { ProfileActiveScrim } from "@/components/profile/ProfileActiveScrim";
 import { TeamPanel } from "@/components/profile/TeamPanel";
 import { MatchHistoryPanel } from "@/components/profile/MatchHistoryPanel";
@@ -31,6 +32,14 @@ import { ScrimmageStatus } from "@/app/api/graphql/types/graphql";
 
 const UserProfileRoute = graphql(`
   query UserProfile($user_id: String!) {
+    getUsers {
+        _id
+        name
+        mmr
+        heroes
+        online
+        blockInvites
+    }
     getUserOrgInvitations(user_id: $user_id) {
         _id
         name
@@ -150,7 +159,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     const user = session?.user as User;
     const userId = await params.then(p => p.id);
 
-    const [{ getUser: profile, getUserOrgInvitations: orgInvitations, getScrimmageInvitations: scrimInvitations }, heroes] = await Promise.all([
+    const [{ getUser: profile, getUsers: allUsers, getUserOrgInvitations: orgInvitations, getScrimmageInvitations: scrimInvitations }, heroes] = await Promise.all([
         grafbase.request(UserProfileRoute, { user_id: userId }),
         getHeroes(),
     ]);
@@ -181,6 +190,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
                 {user?.id === profile._id && scrimInvitations && scrimInvitations.length > 0 && (
                     <ProfileScrimInvites invites={scrimInvitations} profileId={profile._id} />
                 )}
+                {user?.id === profile._id && (
+                    <ProfileTeamInvite
+                        userName={profile.name}
+                        userMmr={profile.mmr}
+                        profileId={profile._id}
+                    />
+                )}
                 <ProfileStats _id={profile._id} scrimmages={profile.scrimmages.filter(scrim => scrim.status !== ScrimmageStatus.Active)} />
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
                     <div className="lg:col-span-2">
@@ -189,6 +205,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
                             isOwner={user?.id === profile._id}
                             org={profile.organization ?? null}
                             orgScrims={orgScrims ?? []}
+                            allUsers={allUsers ?? []}
                         />
                     </div>
                     <div className="lg:col-span-3">

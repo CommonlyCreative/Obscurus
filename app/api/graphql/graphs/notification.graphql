@@ -10,7 +10,7 @@ type Notification {
     recipient: String!      # Recipient user ID
     type: NotificationType!
     title: String!
-    description: String!
+    description: String
     link: String            # Optional URL for navigation
     actionId: String        # Optional resource ID for invitation actions (org ID, scrimmage ID, etc.)
     senderName: String!     # Display name of sender, or "System"
@@ -26,7 +26,7 @@ input SendNotificationInput {
     recipient: String!
     type: NotificationType!
     title: String!
-    description: String!
+    description: String
     link: String
     actionId: String
     senderName: String!
@@ -37,6 +37,6 @@ extend type Query {
 }
 
 extend type Mutation {
-    sendNotification(input: SendNotificationInput!): Notification
+    addNotification(input: SendNotificationInput!): Notification
     dismissNotification(notification_id: String!, user_id: String!): Boolean
 }

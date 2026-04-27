@@ -2,31 +2,35 @@ import express from "express";
 import { createServer } from "http";
 import { Server, Socket } from "socket.io";
 import { LiveMember, LiveTeam } from "./lib/socket/teams.js";
+import { Notification, SendNotificationInput } from "./app/api/graphql/types/graphql.js";
 import 'dotenv/config'
 import SteamAuth from "node-steam-openid";
 import cors from 'cors';
 
 const HOST = process.env.HOSTNAME
 const PORT = process.env.SOCKET_PORT;
+const CLIENT_PORT = process.env.PORT;
+const dev = process.env.NODE_ENV !== 'production'
 
-const url = `${HOST}:${PORT}`;
+const url = HOST + (dev ? `:${CLIENT_PORT}` : '');
 
 const steam = new SteamAuth({
-    realm: HOST ?? 'http://localhost', // Site name displayed to users on logon
+    realm: url, // Site name displayed to users on logon
     returnUrl: `${url}/auth/steam/authenticate`, // Your return route
     apiKey: String(process.env.STEAM_API_KEY), // Steam API key
 });
 
 
+
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: `${HOST}` }))
+app.use(cors({ origin: url }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: `${HOST}`,
+        origin: url,
         methods: ["GET", "POST"],
     },
 });
@@ -73,7 +77,7 @@ io.on("connection", (socket: Socket) => {
         console.log(`User ${userId} joining room`);
         connectedUsers[userId] = socket.id;
         socketUsers.set(socket.id, userId);
-        socket.join(`user:${userId}`);
+        socket.join(`profile:${userId}`);
 
         const pending = disconnectTimers.get(userId);
         if (pending) {
@@ -85,6 +89,12 @@ io.on("connection", (socket: Socket) => {
     setupTeamSocket(io, socket);
     setupScrimSocket(io, socket);
 
+    socket.on("notify", (notification: Notification) => {
+        if (!notification) return;
+        const socketId = connectedUsers[notification.recipient];
+        io.in(socketId).emit("notify", notification)
+    });
+
     socket.on("disconnect", () => {
         console.log("Client disconnected:", socket.id);
         const userId = socketUsers.get(socket.id);
@@ -95,36 +105,49 @@ io.on("connection", (socket: Socket) => {
 
 const liveTeams = new Map<string, LiveTeam>();
 
-function broadcastTeamUpdate(io: Server, leaderId: string) {
-    const team = liveTeams.get(leaderId) ?? null;
-    const rooms = new Set([`profile:${leaderId}`]);
-    if (team) {
-        for (const member of team.members.filter(member => member.userId !== leaderId))
-            rooms.add(`profile:${member.userId}`);
-    }
-    for (const room of rooms) {
-        io.to(room).emit("team:update", team, leaderId);
-    }
-    io.to(AllTeams).emit("team:update", team, leaderId);
+function broadcastTeamUpdateById(io: Server, memberId: string) {
+    const team = getTeam(memberId);
+    broadcastTeamUpdate(io, team?.members.map(member => member.userId) ?? [memberId], team)
 }
 
-function removeFromAllTeams(io: Server, userId: string) {
+function broadcastTeamUpdateByTeam(io: Server, team: LiveTeam) {
+    broadcastTeamUpdate(io, team.members.map(member => member.userId), team)
+}
+
+function broadcastTeamUpdate(io: Server, members: string[], update: LiveTeam | null) {
+    const rooms = new Set([] as string[]);
+    for (const member of members) {
+        rooms.add(`profile:${member}`);
+
+        io.to(`profile:${member}`).emit("team:update", update, member);
+    }
+    io.to(AllTeams).emit("team:update", update, "all");
+}
+
+function removeFromAllTeams(io: Server, userId: string, silent?: boolean) {
     if (liveTeams.has(userId)) {
+        const team = liveTeams.get(userId)!
         liveTeams.delete(userId);
-        broadcastTeamUpdate(io, userId);
+       if (!silent)  broadcastTeamUpdate(io, team.members.map(member => member.userId), null);
         return;
     }
     for (const [leaderId, team] of liveTeams.entries()) {
         const idx = team.members.findIndex((m) => m.userId === userId);
         if (idx !== -1) {
-            team.members.splice(idx, 1);
-            broadcastTeamUpdate(io, leaderId);
+            const removed = team.members.splice(idx, 1);
+            if (!silent) broadcastTeamUpdate(io, team.members.concat(removed).map(member => member.userId), team);
             return;
         }
     }
 }
 
 const AllTeams = `teams:all`;
+
+function getTeam(user_id: string) {
+    return liveTeams.get(user_id) ??
+        Array.from(liveTeams.values()).find(t => t.members.some(m => m.userId === user_id)) ??
+        null;
+}
 
 export function setupTeamSocket(
     io: Server,
@@ -143,32 +166,28 @@ export function setupTeamSocket(
                 members: [{ ...info, userId }],
                 maxSize: 6,
             });
-            broadcastTeamUpdate(io, userId);
+            broadcastTeamUpdateById(io, userId);
         }
     );
 
-    socket.on("team:subscribe", (targetUserIds: string[]) => {
+    socket.on("team:subscribe", (targetUserIds: string[] | "all") => {
+        if (targetUserIds === "all") {
+            socket.join(AllTeams);
+            io.to(AllTeams).emit("team:multiple", Object.fromEntries(liveTeams))
+            return;
+        }
         for (const userId of targetUserIds) {
-            if (userId === "all") {
-                socket.join(AllTeams);
-                io.to(AllTeams).emit("team:multiple", liveTeams)
-            } else {
-                socket.join(`profile:${userId}`);
-                const team =
-                    liveTeams.get(userId) ??
-                    Array.from(liveTeams.values()).find(t => t.members.some(m => m.userId === userId)) ??
-                    null;
-                io.to(`profile:${userId}`).to(AllTeams).emit("team:state", team, userId);
-            }
+            socket.join(`profile:${userId}`)
+            const team = getTeam(userId)
+            io.to(`profile:${userId}`).to(AllTeams).emit("team:state", team, userId, team?.leaderId);
         }
     });
 
-    socket.on("team:unsubscribe", (targetUserIds: string[]) => {
+    socket.on("team:unsubscribe", (targetUserIds: string[] | "all") => {
+        if (targetUserIds === "all")
+            return socket.leave(AllTeams);
         for (const userId of targetUserIds)
-            if (userId === "all")
-                socket.leave(AllTeams);
-            else
-                socket.leave(`profile:${userId}`);
+            socket.leave(`profile:${userId}`);
     });
 
     socket.on("team:rename", (newName: string) => {
@@ -177,7 +196,7 @@ export function setupTeamSocket(
         const team = liveTeams.get(userId);
         if (!team) return;
         team.name = newName;
-        broadcastTeamUpdate(io, userId);
+        broadcastTeamUpdateById(io, userId);
     });
 
     socket.on("team:leave", () => {
@@ -199,7 +218,46 @@ export function setupTeamSocket(
             if (team.members.length >= team.maxSize) break;
             team.members.push(createFillerMember("Member " + (i + 1)))
         }
-        broadcastTeamUpdate(io, team.leaderId)
+        broadcastTeamUpdateByTeam(io, team)
+    });
+
+    socket.on("team:invite", async (member: LiveMember) => {
+        const leaderId = socketUsers.get(socket.id);
+        if (!leaderId) return;
+        const team = liveTeams.get(leaderId);
+        if (!team || team.members.length >= team.maxSize) return;
+        if (team.members.some(m => m.userId === member.userId)) return;
+
+        if (team && team.members.length < team.maxSize) {
+            team.members.push(member);
+            broadcastTeamUpdateByTeam(io, team);
+        }
+        io.to(`user:${member.userId}`).emit("team:invite", team);
+    });
+
+    socket.on("team:kick", (targetUserId: string) => {
+        const userId = socketUsers.get(socket.id);
+        if (!userId) return;
+        if (!liveTeams.has(userId)) return; // only the leader can kick
+        removeFromAllTeams(io, targetUserId);
+    });
+
+    socket.on("team:invite:respond", (accepted: boolean, leaderId: string) => {
+        const userId = socketUsers.get(socket.id);
+        if (!userId) return;
+
+        const team = liveTeams.get(leaderId);
+        if (!team) return;
+        const member = team.members.find(m => m.userId === userId)
+
+        removeFromAllTeams(io, userId);
+
+        if (accepted&&member) {
+            team.members.push({ ...member, status: "JOINED"})
+        } else
+            io.to(`profile:${userId}`).emit("team:update", team, userId);
+
+        broadcastTeamUpdateByTeam(io, team);
     });
 
     socket.on("disconnect", () => {
@@ -252,12 +310,12 @@ function setupScrimSocket(_io: Server, socket: Socket) {
 }
 
 httpServer.listen(PORT, () => {
-    console.log(`Server running on ${HOST}:${PORT}`);
+    console.log(`Server running in ${process.env.NODE_ENV ?? "development"} mode on port ${PORT}`);
 });
 
 const createFillerMember: (name: string) => LiveMember = (name: string) => ({
     name,
     mmr: 1,
-    role: "Fill",
+    status: "JOINED",
     userId: name + "-id"
 })

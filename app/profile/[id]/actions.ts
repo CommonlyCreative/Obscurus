@@ -2,7 +2,8 @@
 
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
-import { InvitationStatus } from "@/app/api/graphql/types/graphql";
+import { InvitationStatus, NotificationType, SendNotificationMutation } from "@/app/api/graphql/types/graphql";
+import { SendNotificationM } from "@/lib/shared-graphs";
 import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -55,4 +56,46 @@ export async function declineScrimInviteAction(invitationId: string, profileId: 
     if (!session?.user) throw new Error("Unauthorized");
     await grafbase.request(RespondToScrimInviteMutation, { invitation_id: invitationId, status: InvitationStatus.Declined });
     revalidatePath(`/profile/${profileId}`);
+}
+
+// ─── Team invite notification ──────────────────────────────────────────────
+
+export type TeamInviteNotificationResult = SendNotificationMutation["addNotification"];
+
+export async function notifyTeamInviteResponseAction(
+    leaderId: string,
+    accepted: boolean,
+    profileId: string,
+): Promise<TeamInviteNotificationResult | null> {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user) throw new Error("Unauthorized");
+
+    const responderName = session.user.name;
+    const result = await grafbase.request(SendNotificationM, {
+        input: {
+            recipient: leaderId,
+            type: NotificationType.General,
+            title: accepted ? "Team Invite Accepted" : "Team Invite Declined",
+            description: accepted
+                ? `${responderName} accepted your team invite and joined your team.`
+                : `${responderName} declined your team invite.`,
+            senderName: responderName,
+        },
+    });
+
+    revalidatePath(`/profile/${profileId}`);
+    return result.addNotification ?? null;
+}
+
+const GetAllTeamUsers = graphql(`
+  query GetAllTeamUsers {
+    getUsers {
+      _id
+      name
+    }
+  }
+`);
+
+export async function getAllTeamUsers() {
+    return await grafbase.request(GetAllTeamUsers);
 }

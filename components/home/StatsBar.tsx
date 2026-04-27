@@ -11,7 +11,7 @@ const STATS: Stat[] = [
 ];
 
 export function StatsBar({ scrims, players, orgs }: { scrims: number, players: number, orgs: number }) {
-    const { teams, loading } = useTeamSocket(["all"])
+    const { teams, loading } = useTeamSocket("all")
     const stats = [
         { value: loading ? orgs : Object.entries(teams).length+orgs, label: "Active Teams" },
         { value: scrims, label: "Open Scrims" },
