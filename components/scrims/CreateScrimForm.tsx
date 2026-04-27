@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { RosterSelector } from "./RosterSelector";
 import { LiveTeamPicker } from "./LiveTeamPicker";
-import { useTeamSocket } from "@/hooks/useTeamSocket";
+import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { createScrimmageAction } from "@/app/scrims/create/actions";
 import { BestOf, CreateScrimPageQuery, MatchSide, ScrimmageInvitationInput } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
@@ -84,7 +84,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
 
     // Live team for non-org-roster path
     const { teams: liveTeams } = useTeamSocket([userId]);
-    const liveTeam = liveTeams[userId];
+    const liveTeam = findTeam(liveTeams, userId);
 
     const useOrgRoster = isManager && orgAffiliated;
     const rosterIds = useOrgRoster

@@ -6,7 +6,7 @@ import { cn, formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
 import { MatchLog } from "@/components/scrims/MatchLog";
 import { ScrimmageStatus, ScrimmageResult, MatchResult, MatchSide, BestOf, InvitationStatus, OrgMemberStatus, GetScrimmageDetailQuery } from "@/app/api/graphql/types/graphql";
-import { useTeamSocket } from "@/hooks/useTeamSocket";
+import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { useScrimSocket } from "@/hooks/useScrimSocket";
 import type { ScrimPatch } from "@/lib/socket/scrims";
 import type { MatchLogPatch } from "@/components/scrims/MatchLog";
@@ -175,7 +175,7 @@ export function ScrimDetail({
     const [error, setError] = useState<string | null>(null);
     const [confirmEnd, setConfirmEnd] = useState(false);
     const { teams: liveTeams } = useTeamSocket(userId ? [userId] : []);
-    const liveTeam = userId ? liveTeams[userId] : undefined;
+    const liveTeam = userId ? findTeam(liveTeams, userId) : undefined;
 
     const myInvitation = userId
         ? (scrim.invitations.find(inv => inv.user._id === userId) ?? null)
