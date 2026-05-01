@@ -379,7 +379,7 @@ export function EditProfileForm({
                                 <button
                                     type="button"
                                     onClick={handleGoogleDisconnect}
-                                    className="px-3 py-1.5 text-xs font-semibold rounded border border-edge text-danger hover:border-danger/30 transition-colors"
+                                    className="px-3 py-1.5 text-xs font-semibold cursor-pointer rounded border border-danger/30 text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
                                 >
                                     Disconnect
                                 </button>
