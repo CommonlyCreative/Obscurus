@@ -67,12 +67,16 @@ function computeSeriesResult(matches: Match[], bestOf: BestOf): ScrimmageResult 
     const needed = seriesWinsNeeded(bestOf);
     if (hostWins >= needed) return ScrimmageResult.HostWin;
     if (opponentWins >= needed) return ScrimmageResult.OpponentWin;
+    if (bestOf === BestOf.Unlimited) {
+        if (hostWins > opponentWins) return ScrimmageResult.HostWin;
+        if (hostWins < opponentWins) return ScrimmageResult.OpponentWin;
+    }
 
     // All matches played without a winner → draw
     const totalGames = bestOf === BestOf.Unlimited ? Infinity
         : bestOf === BestOf.One ? 1
-        : bestOf === BestOf.Three ? 3
-        : 5;
+            : bestOf === BestOf.Three ? 3
+                : 5;
     const played = matches.filter(m => m.result).length;
     if (played >= totalGames) return ScrimmageResult.Draw;
 
@@ -127,11 +131,10 @@ export class ScrimmageDataSource {
     }
 
     async respondToInvitation(invitationId: string, status: InvitationStatus): Promise<WithId<DBScrimmage> | null> {
-        await this.collection.updateOne(
+        const scrim = await this.collection.findOneAndUpdate(
             { 'invitations._id': new ObjectId(invitationId) },
             { $set: { 'invitations.$.status': status, 'invitations.$.respondedAt': now(), updatedAt: now() } }
         );
-        const scrim = await this.collection.findOne({ 'invitations._id': new ObjectId(invitationId) });
         return scrim;
     }
 
@@ -263,14 +266,12 @@ export class ScrimmageDataSource {
 
     async setOpponentRoster(
         scrimmageId: string,
-        orgId: string,
         team: string[]
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (![ScrimmageStatus.Scheduling, ScrimmageStatus.Ready].includes(scrim.status))
             throw new Error("Cannot set roster in current status");
-        if (scrim.opponentOrg !== orgId) throw new Error("Your org is not the opponent");
         if (team.length !== 6) throw new Error("Team must have exactly 6 players");
 
         const nextStatus = scrim.status === ScrimmageStatus.Scheduling
@@ -388,7 +389,7 @@ export class ScrimmageDataSource {
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Active)
             throw new Error("Scrimmage must be ACTIVE to cancel a match");
-        if (!scrim.matches.length||scrim.matches.every(m => m.result))
+        if (!scrim.matches.length || scrim.matches.every(m => m.result))
             throw new Error("There is no match in progress");
 
         scrim.matches.pop();
@@ -455,7 +456,27 @@ export class ScrimmageDataSource {
         if (scrim.matches.some(m => !m.result))
             throw new Error("Cannot end scrimmage while a match is in progress");
 
-        return this.patch(scrimmageId, { status: scrim.bestOf === BestOf.Unlimited ? ScrimmageStatus.Completed : ScrimmageStatus.Cancelled });
+        const status = scrim.matches.length > 0 ? ScrimmageStatus.Completed : ScrimmageStatus.Cancelled;
+
+        let result = undefined;
+        
+        if (status === ScrimmageStatus.Completed) {
+            let hostWins = 0;
+            let opponentWins = 0;
+            result = ScrimmageResult.Draw;
+
+            for (const m of scrim.matches) {
+                if (!m.result) continue;
+                if (m.result === MatchResult.HostWin) hostWins++;
+                else if (m.result === MatchResult.OpponentWin) opponentWins++;
+            }
+            if (hostWins > opponentWins)
+                result = ScrimmageResult.HostWin;
+            else if (hostWins < opponentWins)
+                result = ScrimmageResult.OpponentWin;
+        }
+
+        return this.patch(scrimmageId, { status, result });
     }
 
     async cancelScrimmage(scrimmageId: string): Promise<WithId<DBScrimmage> | null> {

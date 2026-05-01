@@ -2,14 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition, useState } from "react";
-import { cn, formatTimeAgo } from "@/lib/utils";
+import { ArrayElement, cn, formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
 import { MatchLog } from "@/components/scrims/MatchLog";
-import { ScrimmageStatus, ScrimmageResult, MatchResult, MatchSide, BestOf, InvitationStatus, OrgMemberStatus, GetScrimmageDetailQuery } from "@/app/api/graphql/types/graphql";
+import { ScrimmageStatus, ScrimmageResult, MatchSide, BestOf, InvitationStatus, OrgMemberStatus, GetScrimmageDetailQuery } from "@/app/api/graphql/types/graphql";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { useScrimSocket } from "@/hooks/useScrimSocket";
 import type { ScrimPatch } from "@/lib/socket/scrims";
 import type { MatchLogPatch } from "@/components/scrims/MatchLog";
+import { getRankByMMR } from "@/lib/deadlock";
 import {
     readyUpAction,
     unreadyAction,
@@ -30,19 +31,9 @@ interface SlimUser {
     mmr?: number | null;
 }
 
-interface SlimTeam {
-    leader: SlimUser;
-    members: SlimUser[];
-}
+export type Scrim = NonNullable<GetScrimmageDetailQuery["getScrimmage"]>;
 
-interface SlimOrg {
-    _id: string;
-    name: string;
-}
-
-type Scrim = NonNullable<GetScrimmageDetailQuery["getScrimmage"]>;
-
-interface ScrimDetailProps {
+export interface ScrimDetailProps {
     scrim: Scrim;
     userId?: string;
     isHost: boolean;
@@ -52,12 +43,12 @@ interface ScrimDetailProps {
     isOpponentMember: boolean;
     isOpponentOrgManager: boolean;
     hostOrgId: string | null;
-    opponentOrg: Scrim["opponentOrg"];
+    opponentOrg: (Omit<NonNullable<Scrim["opponentOrg"]>, "members"> & {
+        members: (ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & {
+            mmr: number
+        })[]
+    }) | null;
     viewerOrgId: string | null;
-}
-
-type ScrimUpdate = {
-
 }
 
 // ─── Status metadata ──────────────────────────────────────────────────────────
@@ -100,56 +91,26 @@ const BEST_OF_LABEL: Record<BestOf, string> = {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function RosterSide({
-    label,
-    org,
-    team,
-    isReady,
-    showReady,
-}: {
-    label: string;
-    org?: SlimOrg | null;
-    team?: SlimTeam | null;
-    isReady: boolean;
-    showReady: boolean;
-}) {
+function RosterRow({ member, isLeader }: { member: SlimUser; isLeader: boolean }) {
+    const rankInfo = member.mmr != null ? getRankByMMR(member.mmr) : undefined;
     return (
-        <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-muted uppercase tracking-wider">{label}</span>
-                {showReady && (
-                    <span className={cn(
-                        "text-xs font-semibold px-1.5 py-0.5 rounded",
-                        isReady ? "bg-success/10 text-success" : "bg-edge text-muted"
-                    )}>
-                        {isReady ? "Ready" : "Not Ready"}
-                    </span>
-                )}
+        <div className={cn(
+            "flex items-center gap-2 px-2 py-1.5 rounded transition-colors",
+            isLeader ? "bg-surface-2" : "hover:bg-surface-2/40"
+        )}>
+            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                {member.name.charAt(0)}
             </div>
-
-            {org && (
-                <div className="text-sm font-bold text-foreground mb-2">{org.name}</div>
+            <span className={cn("text-sm truncate flex-1 min-w-0", isLeader ? "font-semibold text-foreground" : "text-dimmed")}>
+                {member.name}
+            </span>
+            {isLeader && (
+                <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded uppercase tracking-wider shrink-0">C</span>
             )}
-
-            {team ? (
-                <div className="space-y-1.5">
-                    {team.members.map((m) => (
-                        <div key={m._id} className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
-                                {m.name.charAt(0)}
-                            </div>
-                            <span className={cn("text-sm truncate", m._id === team.leader._id ? "text-foreground font-semibold" : "text-dimmed")}>
-                                {m.name}
-                                {m._id === team.leader._id && <span className="text-xs text-muted font-normal ml-1">(leader)</span>}
-                            </span>
-                            {m.mmr != null && (
-                                <span className="text-xs text-muted ml-auto shrink-0">{m.mmr} MMR</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-xs text-muted italic">No team yet</p>
+            {rankInfo && (
+                <span className={cn("text-[10px] font-medium shrink-0", rankInfo.rank.text)}>
+                    {rankInfo.rank.name}
+                </span>
             )}
         </div>
     );
@@ -165,10 +126,10 @@ export function ScrimDetail({
     isOpponentLeader,
     isHostMember,
     isOpponentMember,
-    hostOrgId,
+    hostOrgId: _hostOrgId,
     opponentOrg,
     isOpponentOrgManager,
-    viewerOrgId,
+    viewerOrgId: _viewerOrgId,
 }: ScrimDetailProps) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
@@ -177,31 +138,31 @@ export function ScrimDetail({
     const { teams: liveTeams } = useTeamSocket(userId ? [userId] : []);
     const liveTeam = userId ? findTeam(liveTeams, userId) : undefined;
 
+    
     const myInvitation = userId
-        ? (scrim.invitations.find(inv => inv.user._id === userId) ?? null)
-        : null;
+    ? (scrim.invitations.find(inv => inv.user._id === userId) ?? null)
+    : null;
     const [inviteStatus, setInviteStatus] = useState<InvitationStatus | null>(
         myInvitation?.status ?? null
     );
-
+    
     const activeOrgMembers = opponentOrg?.members.filter(m => m.status === OrgMemberStatus.Active) ?? [];
     const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(
         () => new Set((opponentOrg?.coreTeam ?? []).slice(0, 6).map(m => m._id))
     );
-
-    function toggleTeamMember(userId: string) {
+    
+    function toggleTeamMember(memberId: string) {
         setSelectedTeamIds(prev => {
             const next = new Set(prev);
-            if (next.has(userId)) {
-                next.delete(userId);
+            if (next.has(memberId)) {
+                next.delete(memberId);
             } else if (next.size < 6) {
-                next.add(userId);
+                next.add(memberId);
             }
             return next;
         });
     }
-
-    // Optimistic state for all mutable scrim fields — avoids waiting for router.refresh()
+    
     const [live, setLive] = useState({
         status: scrim.status,
         result: scrim.result ?? null as ScrimmageResult | null,
@@ -210,13 +171,11 @@ export function ScrimDetail({
         partyCode: scrim.partyCode ?? null as string | null,
         matches: scrim.matches,
     });
-
-    // Apply a patch from the socket (incoming from another client — no broadcast)
+    
     function applyPatch(update: Partial<typeof live>) {
         setLive(prev => ({ ...prev, ...update }));
     }
-
-    // Apply a patch locally AND broadcast to other clients
+    
     function applyAndBroadcast(overrides: Partial<typeof live>) {
         const next = { ...live, ...overrides };
         setLive(next);
@@ -235,7 +194,7 @@ export function ScrimDetail({
             })),
         });
     }
-
+    
     const { broadcastPatch, broadcastRefresh } = useScrimSocket(
         scrim._id,
         (socketPatch: ScrimPatch) => applyPatch({
@@ -248,8 +207,7 @@ export function ScrimDetail({
         }),
         () => router.refresh(),
     );
-
-    // For actions that change team composition (opponentTeam/opponentOrg) — need full server re-fetch
+    
     function refresh(fn: () => Promise<unknown>) {
         setError(null);
         startTransition(async () => {
@@ -262,14 +220,13 @@ export function ScrimDetail({
             }
         });
     }
-
+    
     const { status, result, readyHost, readyOpponent } = live;
     const isActive = status === ScrimmageStatus.Active;
     const isCompleted = status === ScrimmageStatus.Completed;
     const isCancelled = status === ScrimmageStatus.Cancelled;
     const isFinished = isCompleted || isCancelled;
     const showReadyState = [ScrimmageStatus.Ready, ScrimmageStatus.Scheduling, ScrimmageStatus.Scheduled].includes(status);
-    const showReadySection = [ScrimmageStatus.Pending, ScrimmageStatus.Ready, ScrimmageStatus.Scheduling, ScrimmageStatus.Scheduled].includes(status);
     const activeMatch = live.matches.find((m) => !m.result);
     const canEndEarly = isActive && !activeMatch && (isHostLeader || isOpponentLeader);
     const hostTeamSize = scrim.hostTeam?.members.length ?? 0;
@@ -277,15 +234,21 @@ export function ScrimDetail({
     const liveTeamIds = liveTeam?.members.map((m) => m.userId) ?? [];
     const isOrgAffiliated = scrim.hostOrg && scrim.opponentOrg;
     const canJoin = status === ScrimmageStatus.Open
-        && !isHost && !isHostMember && !isOpponentMember
-        && liveTeamIds.length === 6;
-
+    && !isHost && !isHostMember && !isOpponentMember
+    && liveTeamIds.length === 6;
+    
+    const showReadyCheck = !isFinished && userId && showReadyState;
+    const showJoin = status === ScrimmageStatus.Open && userId && !isHost && !isHostMember;
+    const showInvitation = myInvitation && !isFinished && !isActive && myInvitation.status === InvitationStatus.Pending;
+    const showAcceptChallenge = status === ScrimmageStatus.Pending && opponentOrg && isOpponentOrgManager;
+    const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
+    
     function handleRespondToInvite(newStatus: InvitationStatus) {
         if (!myInvitation) return;
         setInviteStatus(newStatus);
         refresh(() => respondToInvitationAction(myInvitation._id, newStatus, !isOrgAffiliated ? liveTeam : null));
     }
-
+    
     function handleReady(side: MatchSide, isReady: boolean) {
         setError(null);
         startTransition(async () => {
@@ -293,379 +256,428 @@ export function ScrimDetail({
                 const data = await (isReady
                     ? unreadyAction(scrim._id, side)
                     : readyUpAction(scrim._id, side));
-                if (data) {
-                    applyAndBroadcast({
-                        status: data.status as ScrimmageStatus,
-                        readyHost: data.readyHost,
-                        readyOpponent: data.readyOpponent,
-                    });
+                    if (data) {
+                        applyAndBroadcast({
+                            status: data.status as ScrimmageStatus,
+                            readyHost: data.readyHost,
+                            readyOpponent: data.readyOpponent,
+                        });
+                    }
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
                 }
-            } catch (e) {
-                setError(e instanceof Error ? e.message : "Action failed");
-            }
-        });
-    }
+            });
+        }
+        
+        function handleEndEarly() {
+            setError(null);
+            startTransition(async () => {
+                try {
+                    const data = await endScrimmageAction(scrim._id);
+                    if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
+                    setConfirmEnd(false);
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
+                }
+            });
+        }
+        
+        function handleCancel() {
+            setError(null);
+            startTransition(async () => {
+                try {
+                    const data = await cancelScrimmageAction(scrim._id);
+                    if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
+                }
+            });
+        }
+        
+        function handleJoin() {
+            setError(null);
+            startTransition(async () => {
+                try {
+                    const action = await joinScrimmageAction(scrim._id, liveTeamIds);
+                    applyAndBroadcast({ status: action?.status });
+                    broadcastRefresh();
+                    router.refresh();
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
+                }
+            });
+        }
+        
+        function handleLeave() {
+            setError(null);
+            startTransition(async () => {
+                try {
+                    const action = await leaveScrimmageAction(scrim._id, opponentOrg?._id ?? "");
+                    applyAndBroadcast({ status: action?.status });
+                    broadcastRefresh();
+                    router.refresh();
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
+                }
+            });
+        }
+        
+        function handleAction(action: Promise<{ status: ScrimmageStatus } | null | undefined>) {
+            setError(null);
+            startTransition(async () => {
+                try {
+                    const response = await action;
+                    applyAndBroadcast({ status: response?.status });
+                    broadcastRefresh();
+                    router.refresh();
+                } catch (e) {
+                    setError(e instanceof Error ? e.message : "Action failed");
+                }
+            });
+        }
+        
+        function handleMatchLogPatch(patch: MatchLogPatch) {
+            const overrides: Partial<typeof live> = {};
+            if (patch.status !== undefined) overrides.status = patch.status as ScrimmageStatus;
+            if (patch.result !== undefined) overrides.result = patch.result as ScrimmageResult | null;
+            if (patch.matches !== undefined) overrides.matches = patch.matches as NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["matches"];
+            if (patch.partyCode !== undefined) overrides.partyCode = patch.partyCode ?? null;
+            applyAndBroadcast(overrides);
+            router.refresh();
+        }
+        
+        return (
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
 
-    function handleEndEarly() {
-        setError(null);
-        startTransition(async () => {
-            try {
-                const data = await endScrimmageAction(scrim._id);
-                if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
-                setConfirmEnd(false);
-            } catch (e) {
-                setError(e instanceof Error ? e.message : "Action failed");
-            }
-        });
-    }
+            {/* ── VS Match Card ── */}
+            <div className="bg-surface border border-edge rounded-lg overflow-hidden">
 
-    function handleCancel() {
-        setError(null);
-        startTransition(async () => {
-            try {
-                const data = await cancelScrimmageAction(scrim._id);
-                if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
-            } catch (e) {
-                setError(e instanceof Error ? e.message : "Action failed");
-            }
-        });
-    }
-
-    function handleMatchLogPatch(patch: MatchLogPatch) {
-        const overrides: Partial<typeof live> = {};
-        if (patch.status !== undefined) overrides.status = patch.status as ScrimmageStatus;
-        if (patch.result !== undefined) overrides.result = patch.result as ScrimmageResult | null;
-        if (patch.matches !== undefined) overrides.matches = patch.matches as NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["matches"];
-        if (patch.partyCode !== undefined) overrides.partyCode = patch.partyCode ?? null;
-        applyAndBroadcast(overrides);
-        router.refresh();
-    }
-
-    return (
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-
-            {/* ── Header ── */}
-            <div className="bg-surface border border-edge rounded-lg p-5">
-                <div className="flex flex-wrap items-start gap-3 mb-4">
-                    <span className={cn(
-                        "text-xs font-bold px-2.5 py-1 rounded-full border uppercase tracking-wider",
-                        STATUS_COLORS[status]
-                    )}>
+                {/* Badges row */}
+                <div className="flex items-center gap-2 px-5 py-3 border-b border-edge bg-surface-2/30">
+                    <span className={cn("text-[11px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider", STATUS_COLORS[status])}>
                         {STATUS_LABEL[status]}
                     </span>
-
                     {scrim.bestOf && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-surface-2 border border-edge text-dimmed">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-2 border border-edge text-dimmed">
                             {BEST_OF_LABEL[scrim.bestOf]}
                         </span>
                     )}
-
                     {scrim.wagerAmount > 0 && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-primary/10 border border-primary/30 text-primary">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 border border-primary/30 text-primary">
                             {scrim.wagerAmount} cr wager
                         </span>
                     )}
-
                     {scrim.isPrivate && (
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-surface-2 border border-edge text-muted">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-surface-2 border border-edge text-muted">
                             Private
                         </span>
                     )}
-
-                    <span className="text-xs text-muted ml-auto">
-                        Posted {formatTimeAgo(new Date(scrim.createdAt))}
-                    </span>
+                    <span className="text-xs text-muted ml-auto">{formatTimeAgo(new Date(scrim.createdAt))}</span>
                 </div>
 
-                {scrim.scheduledAt && (
-                    <div className="text-sm text-dimmed mb-2">
-                        Scheduled for{" "}
-                        <span className="font-semibold text-foreground">
-                            {new Date(scrim.scheduledAt).toLocaleString()}
-                        </span>
+                {/* VS matchup */}
+                <div className="grid grid-cols-[1fr_auto_1fr]">
+                    {/* Host */}
+                    <div className="px-6 py-5">
+                        <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">Host</div>
+                        <div className="text-2xl flex items-center gap-3 font-black text-foreground leading-tight">
+                            {scrim.hostOrg?.name ?? scrim.host.name}
+                            <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
+                                ORG
+                            </span>
+                        </div>
+                        {showReadyState && (
+                            <div className={cn("text-xs font-semibold mt-2 flex items-center gap-1.5", readyHost ? "text-success" : "text-muted")}>
+                                <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", readyHost ? "bg-success" : "bg-muted")} />
+                                {readyHost ? "Ready" : "Not Ready"}
+                            </div>
+                        )}
                     </div>
-                )}
 
-                {scrim.note && (
-                    <p className="text-sm text-dimmed leading-relaxed">{scrim.note}</p>
-                )}
+                    {/* VS divider */}
+                    <div className="flex items-center justify-center px-6 border-x border-edge">
+                        <span className="text-base font-black text-edge tracking-wider">VS</span>
+                    </div>
 
-                {/* Series result banner */}
+                    {/* Opponent */}
+                    <div className="px-6 py-5 text-right">
+                        <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">
+                            {scrim.opponentOrg || scrim.opponentTeam ? "Opponent" : "Awaiting"}
+                        </div>
+                        <div className={cn("text-2xl font-black leading-tight", scrim.opponentOrg || scrim.opponentTeam ? "text-foreground" : "text-edge")}>
+                            {scrim.opponentOrg?.name ?? scrim.opponentTeam?.leader.name ?? "Open"}
+                        </div>
+                        {showReadyState && scrim.opponentTeam && (
+                            <div className={cn("text-xs font-semibold mt-2 flex items-center justify-end gap-1.5", readyOpponent ? "text-success" : "text-muted")}>
+                                {readyOpponent ? "Ready" : "Not Ready"}
+                                <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", readyOpponent ? "bg-success" : "bg-muted")} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Result banner */}
                 {isFinished && result && (
-                    <div className={cn(
-                        "mt-4 px-4 py-3 rounded-lg text-sm font-semibold text-center border",
-                        result === ScrimmageResult.HostWin ? "bg-success/10 text-success border-success/30" :
-                            result === ScrimmageResult.OpponentWin ? "bg-danger/10 text-danger border-danger/30" :
-                                "bg-edge text-dimmed border-edge"
+                    <div className={cn("px-6 py-3 text-sm font-semibold text-center border-t",
+                        result === ScrimmageResult.HostWin ? "bg-success/10 text-success border-success/20" :
+                            result === ScrimmageResult.OpponentWin ? "bg-danger/10 text-danger border-danger/20" :
+                                "bg-surface-2 text-dimmed border-edge"
                     )}>
                         {SERIES_RESULT_LABEL[result]}
                     </div>
                 )}
-            </div>
 
-            {/* ── Roster grid ── */}
-            <div className="bg-surface border border-edge rounded-lg p-5">
-                <h2 className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Rosters</h2>
-                <div className="flex gap-8">
-                    <RosterSide
-                        label="Host"
-                        org={scrim.hostOrg}
-                        team={scrim.hostTeam}
-                        isReady={readyHost}
-                        showReady={showReadyState}
-                    />
-                    <div className="w-px bg-edge self-stretch" />
-                    <RosterSide
-                        label="Opponent"
-                        org={scrim.opponentOrg}
-                        team={scrim.opponentTeam}
-                        isReady={readyOpponent}
-                        showReady={showReadyState}
-                    />
-                </div>
-            </div>
-
-            {/* ── Join (OPEN scrimmages) ── */}
-            {status === ScrimmageStatus.Open && userId && !isHost && !isHostMember && (
-                <div className="bg-surface border border-edge rounded-lg p-5 space-y-3">
-                    <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Join Scrimmage</h2>
-                    {liveTeamIds.length < 6 ? (
-                        <p className="text-sm text-dimmed">
-                            Your live team needs{" "}
-                            <span className="text-danger font-semibold">{6 - liveTeamIds.length} more player{6 - liveTeamIds.length !== 1 ? "s" : ""}</span>{" "}
-                            before you can join.
-                        </p>
-                    ) : (
-                        <p className="text-sm text-dimmed">Your team is full and ready to challenge.</p>
-                    )}
-                    <Button
-                        fullWidth
-                        disabled={!canJoin || pending}
-                        onClick={async () => {
-                            setError(null);
-                            startTransition(async () => {
-                                try {
-                                    const action = await joinScrimmageAction(scrim._id, viewerOrgId!, liveTeamIds)
-                                    applyAndBroadcast({ status: action?.status });
-                                    broadcastRefresh();
-                                    router.refresh();
-                                } catch (e) {
-                                    setError(e instanceof Error ? e.message : "Action failed");
-                                }
-                            });
-                        }}
-                    >
-                        {pending ? "Joining…" : "Join Scrimmage"}
-                    </Button>
-                    {error && <p className="text-xs text-danger">{error}</p>}
-                </div>
-            )}
-
-            {/* ── Ready Check ── */}
-            {!isFinished && userId && showReadySection && (
-                <div className="bg-surface border border-edge rounded-lg p-5 space-y-4">
-                    <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Ready Check</h2>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        {/* Host */}
-                        <div className={cn(
-                            "p-4 rounded-lg border space-y-3 text-center",
-                            readyHost ? "border-success/30 bg-success/5" : "border-edge bg-surface-2"
-                        )}>
-                            <div>
-                                <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">
-                                    {scrim.hostOrg?.name ?? "Host"}
-                                </div>
-                                <div className={cn("text-sm font-bold", readyHost ? "text-success" : "text-dimmed")}>
-                                    {readyHost ? "Ready" : "Not Ready"}
-                                </div>
-                            </div>
-                            {showReadyState && isHostLeader && (
-                                <button
-                                    onClick={() => handleReady(MatchSide.Host, readyHost)}
-                                    disabled={pending || hostTeamSize < 6}
-                                    className={cn(
-                                        "w-full px-3 py-1.5 text-xs font-semibold rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                                        readyHost
-                                            ? "border-edge text-muted hover:border-primary/30 hover:text-dimmed"
-                                            : "border-success/30 bg-success/10 text-success hover:bg-success/20"
-                                    )}
-                                >
-                                    {readyHost ? "Unready" : hostTeamSize < 6 ? `Need ${6 - hostTeamSize} more` : "Ready Up"}
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Opponent */}
-                        <div className={cn(
-                            "p-4 rounded-lg border space-y-3 text-center",
-                            readyOpponent ? "border-success/30 bg-success/5" : "border-edge bg-surface-2"
-                        )}>
-                            <div>
-                                <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-1">
-                                    {scrim.opponentOrg?.name ?? "Opponent"}
-                                </div>
-                                <div className={cn("text-sm font-bold", readyOpponent ? "text-success" : "text-dimmed")}>
-                                    {readyOpponent ? "Ready" : "Not Ready"}
-                                </div>
-                            </div>
-                            {showReadyState && isOpponentLeader && (
-                                <button
-                                    onClick={() => handleReady(MatchSide.Opponent, readyOpponent)}
-                                    disabled={pending || oppTeamSize < 6}
-                                    className={cn(
-                                        "w-full px-3 py-1.5 text-xs font-semibold rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
-                                        readyOpponent
-                                            ? "border-edge text-muted hover:border-primary/30 hover:text-dimmed"
-                                            : "border-success/30 bg-success/10 text-success hover:bg-success/20"
-                                    )}
-                                >
-                                    {readyOpponent ? "Unready" : oppTeamSize < 6 ? `Need ${6 - oppTeamSize} more` : "Ready Up"}
-                                </button>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* PENDING: accept / decline a private challenge — with roster picker */}
-                    {status === ScrimmageStatus.Pending && opponentOrg && isOpponentOrgManager && (
-                        <div className="pt-4 border-t border-edge space-y-4">
-                            <p className="text-sm text-dimmed">
-                                You've been challenged to a scrimmage. Select your 6-player roster to accept.
+                {/* Schedule / note footer */}
+                {(scrim.scheduledAt || scrim.note) && (
+                    <div className="px-5 py-3 border-t border-edge flex flex-wrap gap-x-6 gap-y-1">
+                        {scrim.scheduledAt && (
+                            <p className="text-xs text-dimmed">
+                                <span className="text-muted">Scheduled </span>
+                                <span className="text-foreground font-medium">{new Date(scrim.scheduledAt).toLocaleString()}</span>
                             </p>
+                        )}
+                        {scrim.note && <p className="text-xs text-dimmed">{scrim.note}</p>}
+                    </div>
+                )}
+            </div>
 
-                            {/* Member picker */}
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-semibold text-muted uppercase tracking-wider">
-                                        Select Roster — {selectedTeamIds.size}/6
-                                    </span>
-                                    {selectedTeamIds.size < 6 && (
-                                        <span className="text-xs text-danger">
-                                            Need {6 - selectedTeamIds.size} more
+            {/* ── Two-column layout ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4 items-start">
+
+                {/* ── Left: Rosters + Match Log ── */}
+                <div className="space-y-4">
+
+                    {/* Rosters */}
+                    <div className="bg-surface border border-edge rounded-lg overflow-hidden">
+                        <div className="grid grid-cols-2 divide-x divide-edge">
+
+                            {/* Host roster */}
+                            <div className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-semibold text-muted uppercase tracking-widest">Host Roster</span>
+                                    {scrim.hostTeam && (
+                                        <span className={cn(
+                                            "text-[10px] font-semibold",
+                                            scrim.hostTeam.members.length === 6 ? "text-success" : "text-muted"
+                                        )}>
+                                            {scrim.hostTeam.members.length}/6
                                         </span>
                                     )}
                                 </div>
-                                {activeOrgMembers.length === 0 ? (
-                                    <p className="text-xs text-muted italic">No active members in this organization.</p>
-                                ) : activeOrgMembers.map(member => {
-                                    const inTeam = selectedTeamIds.has(member.user._id);
-                                    const disabled = !inTeam && selectedTeamIds.size >= 6;
-                                    return (
+                                {scrim.hostTeam ? (
+                                    <div className="space-y-0.5">
+                                        {scrim.hostTeam.members.map(m => (
+                                            <RosterRow key={m._id} member={m} isLeader={m._id === scrim.hostTeam!.leader._id} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted italic">No roster yet</p>
+                                )}
+                            </div>
+
+                            {/* Opponent roster */}
+                            <div className="p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <span className="text-[10px] font-semibold text-muted uppercase tracking-widest">Opponent Roster</span>
+                                    {scrim.opponentTeam && (
+                                        <span className={cn(
+                                            "text-[10px] font-semibold",
+                                            scrim.opponentTeam.members.length === 6 ? "text-success" : "text-muted"
+                                        )}>
+                                            {scrim.opponentTeam.members.length}/6
+                                        </span>
+                                    )}
+                                </div>
+                                {scrim.opponentTeam ? (
+                                    <div className="space-y-0.5">
+                                        {scrim.opponentTeam.members.map(m => (
+                                            <RosterRow key={m._id} member={m} isLeader={m._id === scrim.opponentTeam!.leader._id} />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted italic">Waiting for opponent</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* ── Right sidebar ── */}
+                <div className="space-y-4">
+
+                    {/* Join (OPEN) */}
+                    {showJoin && (
+                        <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
+                            <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Join Scrimmage</h3>
+                            <p className="text-xs text-dimmed leading-relaxed">
+                                {liveTeamIds.length < 6
+                                    ? <><span className="text-danger font-semibold">{6 - liveTeamIds.length} more player{6 - liveTeamIds.length !== 1 ? "s" : ""}</span> needed before you can join.</>
+                                    : "Your team is full and ready to challenge."}
+                            </p>
+                            <Button fullWidth disabled={!canJoin || pending} onClick={handleJoin}>
+                                {pending ? "Joining…" : "Join Scrimmage"}
+                            </Button>
+                            {error && <p className="text-xs text-danger">{error}</p>}
+                        </div>
+                    )}
+
+                    {/* Ready Check */}
+                    {showReadyCheck && (
+                        <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
+                            <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Ready Check</h3>
+
+                            <div className="space-y-2">
+                                {/* Host */}
+                                <div className={cn(
+                                    "flex items-center justify-between p-3 rounded border transition-colors",
+                                    readyHost ? "border-success/30 bg-success/5" : "border-edge bg-surface-2"
+                                )}>
+                                    <div>
+                                        <div className="text-xs font-semibold text-foreground">{scrim.hostOrg?.name ?? "Host"}</div>
+                                        <div className={cn("text-xs mt-0.5", readyHost ? "text-success" : "text-muted")}>
+                                            {readyHost ? "Ready" : "Not Ready"}
+                                        </div>
+                                    </div>
+                                    {isHostLeader && (!scrim.scheduledAt || scrim.scheduledAt < Date.now()) && (
                                         <button
-                                            key={member.user._id}
-                                            type="button"
-                                            onClick={() => toggleTeamMember(member.user._id)}
-                                            disabled={disabled}
+                                            onClick={() => handleReady(MatchSide.Host, readyHost)}
+                                            disabled={pending || hostTeamSize < 6}
                                             className={cn(
-                                                "w-full flex items-center justify-between px-3 py-2.5 rounded border text-sm transition-colors",
-                                                inTeam
-                                                    ? "border-primary/40 bg-primary/5 text-foreground"
-                                                    : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                "px-3 py-1.5 text-xs font-semibold rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                                                readyHost
+                                                    ? "border-edge text-muted hover:border-primary/30 hover:text-dimmed"
+                                                    : "border-success/30 bg-success/10 text-success hover:bg-success/20"
                                             )}
                                         >
-                                            <span className="font-medium">{member.user.name}</span>
-                                            <span className="text-xs text-muted">{member.user.mmr} MMR</span>
+                                            {readyHost ? "Unready" : hostTeamSize < 6 ? `Need ${6 - hostTeamSize}` : "Ready Up"}
                                         </button>
-                                    );
-                                })}
+                                    )}
+                                </div>
+
+                                {/* Opponent */}
+                                <div className={cn(
+                                    "flex items-center justify-between p-3 rounded border transition-colors",
+                                    readyOpponent ? "border-success/30 bg-success/5" : "border-edge bg-surface-2"
+                                )}>
+                                    <div>
+                                        <div className="text-xs font-semibold text-foreground">{scrim.opponentOrg?.name ?? "Opponent"}</div>
+                                        <div className={cn("text-xs mt-0.5", readyOpponent ? "text-success" : "text-muted")}>
+                                            {readyOpponent ? "Ready" : "Not Ready"}
+                                        </div>
+                                    </div>
+                                    {isOpponentLeader && (!scrim.scheduledAt || scrim.scheduledAt < Date.now()) && (
+                                        <button
+                                            onClick={() => handleReady(MatchSide.Opponent, readyOpponent)}
+                                            disabled={pending || oppTeamSize < 6}
+                                            className={cn(
+                                                "px-3 py-1.5 text-xs font-semibold rounded border transition-colors disabled:opacity-40 disabled:cursor-not-allowed",
+                                                readyOpponent
+                                                    ? "border-edge text-muted hover:border-primary/30 hover:text-dimmed"
+                                                    : "border-success/30 bg-success/10 text-success hover:bg-success/20"
+                                            )}
+                                        >
+                                            {readyOpponent ? "Unready" : oppTeamSize < 6 ? `Need ${6 - oppTeamSize}` : "Ready Up"}
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
-                            {/* Accept / Decline */}
-                            <div className="flex gap-2">
-                                <Button
-                                    fullWidth
-                                    onClick={() => refresh(() => acceptChallengeWithRosterAction(scrim._id, opponentOrg._id, Array.from(selectedTeamIds)))}
-                                    disabled={pending || selectedTeamIds.size < 6}
-                                >
-                                    Accept Challenge
+                            {/* Leave option for opponent */}
+                            {isOpponentLeader && [ScrimmageStatus.Ready].includes(status) && (
+                                <Button fullWidth variant="secondary" onClick={handleLeave} disabled={pending}>
+                                    Leave Scrimmage
                                 </Button>
-                                <button
-                                    onClick={() => refresh(() => declineChallengeAction(scrim._id, opponentOrg._id))}
-                                    disabled={pending}
-                                    className="flex-1 px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
-                                >
-                                    {pending ? "…" : "Decline"}
-                                </button>
+                            )}
+
+                            {error && <p className="text-xs text-danger">{error}</p>}
+                        </div>
+                    )}
+
+                    {/* My Invitation */}
+                    {showInvitation && !showAcceptChallenge && (
+                        <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
+                            <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Your Invitation</h3>
+                            <div className="flex flex-wrap gap-2">
+                                <span className="text-[11px] font-semibold px-2 py-1 rounded bg-surface-2 border border-edge text-dimmed uppercase tracking-wide">
+                                    {myInvitation!.side === MatchSide.Host ? "Host Side" : "Opponent Side"}
+                                </span>
+                                <span className={cn("text-[11px] font-semibold px-2 py-1 rounded border",
+                                    inviteStatus === InvitationStatus.Accepted ? "bg-success/10 text-success border-success/30" :
+                                        inviteStatus === InvitationStatus.Declined ? "bg-danger/10 text-danger border-danger/30" :
+                                            "bg-primary/10 text-primary border-primary/30"
+                                )}>
+                                    {inviteStatus === InvitationStatus.Accepted ? "Accepted"
+                                        : inviteStatus === InvitationStatus.Declined ? "Declined"
+                                            : "Awaiting Response"}
+                                </span>
                             </div>
+                            {inviteStatus === InvitationStatus.Pending && (
+                                <div className="flex gap-2">
+                                    <Button fullWidth onClick={() => handleRespondToInvite(InvitationStatus.Accepted)} disabled={pending}>
+                                        {pending ? "…" : "Accept"}
+                                    </Button>
+                                    <button
+                                        onClick={() => handleRespondToInvite(InvitationStatus.Declined)}
+                                        disabled={pending}
+                                        className="flex-1 px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
+                                    >
+                                        {pending ? "…" : "Decline"}
+                                    </button>
+                                </div>
+                            )}
+                            {error && <p className="text-xs text-danger">{error}</p>}
                         </div>
                     )}
 
-                    {/* Opponent leave — available once joined, before match goes ACTIVE */}
-                    {isOpponentLeader && [ScrimmageStatus.Ready, ScrimmageStatus.Scheduling, ScrimmageStatus.Scheduled].includes(status) && (
-                        <div className="pt-4 border-t border-edge">
-                            <Button
-                                fullWidth
-                                variant="secondary"
-                                onClick={async () => {
-                                    setError(null);
-                                    startTransition(async () => {
-                                        try {
-                                            const action = await leaveScrimmageAction(scrim._id, opponentOrg?._id ?? "")
-                                            applyAndBroadcast({ status: action?.status });
-                                            broadcastRefresh();
-                                            router.refresh();
-                                        } catch (e) {
-                                            setError(e instanceof Error ? e.message : "Action failed");
-                                        }
-                                    });
-                                }}
-                                disabled={pending}
-                            >
-                                Leave Scrimmage
-                            </Button>
-                        </div>
-                    )}
-
-                    {error && <p className="text-xs text-danger">{error}</p>}
-                </div>
-            )}
-
-            {/* ── My Invitation ── */}
-            {myInvitation && !isFinished && !isActive && (
-                <div className="bg-surface border border-edge rounded-lg p-5 space-y-4">
-                    <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Your Invitation</h2>
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold px-2 py-1 rounded bg-surface-2 border border-edge text-dimmed uppercase tracking-wide">
-                            {myInvitation.side === MatchSide.Host ? "Host Side" : "Opponent Side"}
-                        </span>
-                        <span className={cn(
-                            "text-xs font-semibold px-2 py-1 rounded border",
-                            inviteStatus === InvitationStatus.Accepted
-                                ? "bg-success/10 text-success border-success/30"
-                                : inviteStatus === InvitationStatus.Declined
-                                    ? "bg-danger/10 text-danger border-danger/30"
-                                    : "bg-primary/10 text-primary border-primary/30"
-                        )}>
-                            {inviteStatus === InvitationStatus.Accepted ? "Accepted"
-                                : inviteStatus === InvitationStatus.Declined ? "Declined"
-                                    : "Awaiting Response"}
-                        </span>
+                    {/* Actions — always visible */}
+                    <div className="bg-surface border border-edge rounded-lg p-4 space-y-2">
+                        <h3 className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">Actions</h3>
+                        {showActions ? (
+                            <>
+                                {canEndEarly && !confirmEnd && (
+                                    <Button fullWidth variant="secondary" onClick={() => setConfirmEnd(true)} disabled={pending}>
+                                        End Scrimmage Early
+                                    </Button>
+                                )}
+                                {canEndEarly && confirmEnd && (
+                                    <div className="flex gap-2">
+                                        <Button variant="secondary" onClick={() => setConfirmEnd(false)} disabled={pending} className="flex-1">
+                                            Keep Playing
+                                        </Button>
+                                        <button
+                                            onClick={handleEndEarly}
+                                            disabled={pending}
+                                            className="flex-1 px-4 py-2 text-xs font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
+                                        >
+                                            {pending ? "Ending…" : "Confirm End"}
+                                        </button>
+                                    </div>
+                                )}
+                                {(isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive && (
+                                    <Button fullWidth variant="secondary" onClick={handleCancel} disabled={pending} className="text-danger! hover:border-danger/30!">
+                                        {pending ? "Cancelling…" : "Cancel Scrimmage"}
+                                    </Button>
+                                )}
+                                {error && <p className="text-xs text-danger">{error}</p>}
+                            </>
+                        ) : (
+                            <p className="text-xs text-muted italic">No actions available at this stage.</p>
+                        )}
                     </div>
-                    {inviteStatus === InvitationStatus.Pending && (
-                        <div className="flex gap-2">
-                            <Button
-                                fullWidth
-                                onClick={() => handleRespondToInvite(InvitationStatus.Accepted)}
-                                disabled={pending}
-                            >
-                                {pending ? "…" : "Accept"}
-                            </Button>
-                            <button
-                                onClick={() => handleRespondToInvite(InvitationStatus.Declined)}
-                                disabled={pending}
-                                className="flex-1 px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
-                            >
-                                {pending ? "…" : "Decline"}
-                            </button>
+
+                    {/* Spectator CTA */}
+                    {!isFinished && !userId && (
+                        <div className="bg-surface border border-edge rounded-lg p-4 text-center">
+                            <p className="text-xs text-muted">Sign in to interact with this scrimmage.</p>
                         </div>
                     )}
-                    {error && <p className="text-xs text-danger">{error}</p>}
                 </div>
-            )}
+            </div>
 
-            {/* ── Match log (ACTIVE or COMPLETED) ── */}
+            {/* ── Match Log (full-width below grid) ── */}
             {(isActive || isCompleted) && (
-                <div className="bg-surface border border-edge rounded-lg p-5">
+                <div className="bg-surface border border-edge rounded-lg p-4">
                     <h2 className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Matches</h2>
                     <MatchLog
                         scrimmageId={scrim._id}
@@ -679,62 +691,73 @@ export function ScrimDetail({
                 </div>
             )}
 
-            {/* ── Actions panel ── */}
-            {!isFinished && userId && (canEndEarly || (isHost && !isActive)) && (
-                <div className="bg-surface border border-edge rounded-lg p-5 space-y-3">
-                    <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Actions</h2>
-
-                    {/* End scrimmage early */}
-                    {canEndEarly && !confirmEnd && (
-                        <Button
-                            fullWidth
-                            variant="secondary"
-                            onClick={() => setConfirmEnd(true)}
-                            disabled={pending}
-                        >
-                            End Scrimmage Early
-                        </Button>
-                    )}
-                    {canEndEarly && confirmEnd && (
-                        <div className="flex gap-2">
-                            <Button
-                                variant="secondary"
-                                onClick={() => setConfirmEnd(false)}
-                                disabled={pending}
-                                className="flex-1"
-                            >
-                                Keep Playing
-                            </Button>
-                            <button
-                                onClick={handleEndEarly}
-                                disabled={pending}
-                                className="flex-1 shrink-0 px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
-                            >
-                                {pending ? "Ending…" : "Confirm End"}
-                            </button>
+            {/* ── Accept Challenge (full-width, below grid) ── */}
+            {showAcceptChallenge && (
+                <div className="bg-surface border border-edge rounded-lg p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Accept Challenge</h2>
+                            <p className="text-sm text-dimmed mt-1">Select your 6-player roster to accept this scrimmage.</p>
                         </div>
-                    )}
+                        <span className={cn("text-sm font-bold", selectedTeamIds.size === 6 ? "text-success" : "text-muted")}>
+                            {selectedTeamIds.size}/6
+                        </span>
+                    </div>
 
-                    {/* Host can cancel while not yet ACTIVE */}
-                    {isHost && !isActive && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {activeOrgMembers.length === 0 ? (
+                            <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
+                        ) : activeOrgMembers.map(member => {
+                            const inTeam = selectedTeamIds.has(member.user._id);
+                            const disabled = !inTeam && selectedTeamIds.size >= 6;
+                            const stats = getRankByMMR(member.mmr)
+                            return (
+                                <button
+                                    key={member.user._id}
+                                    type="button"
+                                    onClick={() => toggleTeamMember(member.user._id)}
+                                    disabled={disabled}
+                                    className={cn(
+                                        "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
+                                        inTeam
+                                            ? "border-primary/40 bg-primary/5 text-foreground"
+                                            : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                    )}
+                                >
+                                    <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                        {member.user.name.charAt(0)}
+                                    </div>
+                                    <span className="font-medium flex-1 text-xs truncate">{member.user.name}</span>
+                                    {stats && (
+                                        <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center gap-3 pt-1 border-t border-edge">
                         <Button
-                            fullWidth
-                            variant="secondary"
-                            onClick={handleCancel}
-                            disabled={pending}
-                            className="text-danger! hover:border-danger/30!"
+                            onClick={() => {
+                                handleAction(acceptChallengeWithRosterAction(scrim._id, opponentOrg!._id, Array.from(selectedTeamIds), myInvitation))
+                                if (myInvitation) setInviteStatus(InvitationStatus.Accepted);
+                            }}
+                            disabled={pending || selectedTeamIds.size < 6}
                         >
-                            {pending ? "Cancelling…" : "Cancel Scrimmage"}
+                            Accept Challenge
                         </Button>
-                    )}
-
-                </div>
-            )}
-
-            {/* Spectator / non-participant view */}
-            {!isFinished && !userId && (
-                <div className="text-center py-4 text-sm text-muted">
-                    Sign in to interact with this scrimmage.
+                        <button
+                            onClick={() => {
+                                handleAction(declineChallengeAction(scrim._id, opponentOrg!._id, myInvitation))
+                                if (myInvitation) setInviteStatus(InvitationStatus.Declined);
+                            }}
+                            disabled={pending}
+                            className="px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
+                        >
+                            {pending ? "…" : "Decline"}
+                        </button>
+                        {error && <p className="text-xs text-danger ml-auto self-center">{error}</p>}
+                    </div>
                 </div>
             )}
         </div>

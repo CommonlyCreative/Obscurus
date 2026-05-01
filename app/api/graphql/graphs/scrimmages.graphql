@@ -194,7 +194,7 @@ input UpdateScrimmageInput {
 # Used by the opponent manager to submit their 6-player roster after accepting a scheduled match
 input SetOpponentRosterInput {
     scrimmage_id: String!
-    org_id: String!
+    org_id: String
     team: [String!]!             # Exactly 6 user IDs
 }
 

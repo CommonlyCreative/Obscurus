@@ -15,10 +15,10 @@ const EditProfilePageQuery = graphql(`
     getUser(user_id: $user_id) {
       _id
       name
-      mmr
       heroes
       bio
       region
+      stats { mmr }
       steam {
         id
         username
@@ -31,11 +31,11 @@ const EditProfilePageQuery = graphql(`
           _id
         }
         members {
-          user { _id name mmr }
+          user { _id name stats { rank { name } division} }
           orgRole
           status
         }
-        coreTeam { _id name mmr }
+        coreTeam { _id name stats { rank { name } division} }
       }
     }
     getUsers {
@@ -72,7 +72,7 @@ export default async function EditProfilePage({ params }: { params: Promise<{ id
 
     const activeMembers = org?.members
         .filter((m) => m.status === OrgMemberStatus.Active)
-        .map((m) => ({ _id: m.user._id, name: m.user.name, mmr: m.user.mmr, orgRole: m.orgRole })) ?? [];
+        .map((m) => ({ _id: m.user._id, name: m.user.name, orgRole: m.orgRole })) ?? [];
 
     const coreTeamIds: string[] = org?.coreTeam.map((u) => u._id) ?? [];
 
@@ -115,7 +115,7 @@ export default async function EditProfilePage({ params }: { params: Promise<{ id
                     userId={profileId}
                     users={users.sort((a,b) => a.organization === "No organization" ? -1 : b.organization === "No organization" ? 1 : 0)}
                     steam={steam}
-                    initialMmr={profile.mmr}
+                    stats={profile.stats}
                     initialHeroes={profile.heroes}
                     initialBio={profile.bio ?? ""}
                     heroes={heroes.filter(hero => !hero.in_development&&!hero.disabled).sort((a, b) => a.name.localeCompare(b.name))}

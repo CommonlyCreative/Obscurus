@@ -13,6 +13,7 @@ import { grafbase } from "@/lib/database/grafbase";
 import { headers } from "next/headers";
 import { getHeroes } from "@/lib/actions/deadlockapi";
 import { ScrimmageStatus } from "@/app/api/graphql/types/graphql";
+import { convertSteam64toSteam32 } from "@/lib/deadlock";
 
 // const MOCK_PLAYER: Player = {
 //     name: "ShadowStriker",
@@ -35,7 +36,16 @@ const UserProfileRoute = graphql(`
     getUsers {
         _id
         name
-        mmr
+        steam {
+            id
+        }
+        stats {
+            rank {
+                name
+            }
+            division
+            mmr
+        }
         heroes
         online
         blockInvites
@@ -71,10 +81,17 @@ const UserProfileRoute = graphql(`
     getUser(user_id: $user_id) {
         _id
         name
-        mmr
+        stats {
+            rank {
+                name
+            }
+            division
+            mmr
+        }
         region
         bio
         steam {
+            id
             avatar
             username
         }
@@ -90,7 +107,9 @@ const UserProfileRoute = graphql(`
                 user {
                     _id
                     name
-                    mmr
+                    steam {
+                        id
+                    }
                 }
                 orgRole
                 status
@@ -193,7 +212,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
                 {user?.id === profile._id && (
                     <ProfileTeamInvite
                         userName={profile.name}
-                        userMmr={profile.mmr}
+                        userStats={profile.stats}
                         profileId={profile._id}
                     />
                 )}

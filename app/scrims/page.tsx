@@ -144,7 +144,7 @@ export default function ScrimsPage() {
     const filtered = (scrimmages ?? []).filter(s => s.status === ScrimmageStatus.Open).filter((s) => {
         const name = s.hostTeam.name ?? s.host.name +"'s Team";
         const mmrAvg = s.hostTeam.members.reduce((acc, user) => {
-            acc += user.mmr;
+            acc += user.stats?.mmr ?? 0;
             return acc;
         }, 0) / s.hostTeam.members.length;
         const rank = getRankByMMR(mmrAvg)

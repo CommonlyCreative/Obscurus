@@ -50,6 +50,7 @@ const server = new ApolloServer<Context>({
         notificationDefs.toString(),
         wagerDefs.toString(),
     ],
+    introspection: true,
 });
 const handler = startServerAndCreateNextHandler<NextRequest, Context>(server, {
     context: async (req, res) => {

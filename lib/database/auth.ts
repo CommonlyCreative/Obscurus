@@ -13,9 +13,17 @@ const options = {
 
     socialProviders: {
         discord: {
+            prompt: "consent",
             clientId: process.env.DISCORD_ID!,
             clientSecret: process.env.DISCORD_SECRET!,
-        }
+        },
+        google: {
+            prompt: "consent",
+            accessType: "offline",
+            clientId: process.env.GOOGLE_ID as string,
+            clientSecret: process.env.GOOGLE_SECRET as string,
+            scope: ["https://www.googleapis.com/auth/calendar.readonly","https://www.googleapis.com/auth/calendar.events"],
+        },
     },
 
     databaseHooks: {
@@ -26,7 +34,6 @@ const options = {
                         data: {
                             ...user,
                             online: true,
-                            mmr: 1,
                             heroes: [],
                             region: "NA",
                             bio: "I'm new here! Excited to start scrimming.",
@@ -51,11 +58,6 @@ const options = {
                 type: "boolean",
                 required: true,
                 defaultValue: false,
-            },
-            mmr: {
-                type: "number",
-                required: true,
-                defaultValue: 1,
             },
             heroes: {
                 type: "number[]",

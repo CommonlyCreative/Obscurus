@@ -46,7 +46,6 @@ const GetUserQuery = graphql(`
 
 export interface UpdateProfilePayload {
     userId: string;
-    mmr: number;
     heroes: number[];
     bio: string;
 }
@@ -55,7 +54,6 @@ export async function updateProfileAction(payload: UpdateProfilePayload) {
     await grafbase.request(UpdateUserMutation, {
         user_id: payload.userId,
         input: {
-            mmr: payload.mmr,
             heroes: payload.heroes,
             bio: payload.bio,
         },
@@ -179,3 +177,4 @@ export async function fillWithFillers(orgId: string): Promise<FillerMember[]> {
 
     return created;
 }
+

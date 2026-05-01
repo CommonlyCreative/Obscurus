@@ -55,35 +55,39 @@ function CreateHero(image: string, id: string, name: string): Hero {
 
 export function getRankByMMR(mmr: number): { rank: Rank, division: number } | undefined {
     const rankEntries = Object.entries(Rank) as [string, Rank][];
-
+    const rankNumber = Math.floor(mmr / 10)
     for (const [_, rank] of rankEntries) {
         const { ranking } = rank;
-        if (mmr >= ranking * 6 && mmr < (ranking + 1) * 6) {
-            return { rank, division: mmr - ranking * 6 };
+        if (rankNumber === ranking) {
+            return { rank, division: mmr % 10 };
         }
     }
 }
 
 export function calculateMMR(rank: Rank, division: number) {
-    return rank.ranking * 6 + division;
+    return rank.ranking * 10 + division;
 }
 
 export const Rank = {
-    INITIATE:  { name: "Initiate",  ranking: 0,  color: "#8B6914", text: "text-[#8B6914]", bg: "bg-[#8B6914]/10" },
-    SEEKER:    { name: "Seeker",    ranking: 1,  color: "#6B3A5E", text: "text-[#6B3A5E]", bg: "bg-[#6B3A5E]/10" },
-    ALCHEMIST: { name: "Alchemist", ranking: 2,  color: "#4A7A2E", text: "text-[#4A7A2E]", bg: "bg-[#4A7A2E]/10" },
-    ARCHANIST: { name: "Archanist", ranking: 3,  color: "#3DA53D", text: "text-[#3DA53D]", bg: "bg-[#3DA53D]/10" },
-    RITUALIST: { name: "Ritualist", ranking: 4,  color: "#7B8A8E", text: "text-[#7B8A8E]", bg: "bg-[#7B8A8E]/10" },
-    EMISSARY:  { name: "Emissary",  ranking: 5,  color: "#9B2D4E", text: "text-[#9B2D4E]", bg: "bg-[#9B2D4E]/10" },
-    ARCHON:    { name: "Archon",    ranking: 6,  color: "#6A4D8A", text: "text-[#6A4D8A]", bg: "bg-[#6A4D8A]/10" },
-    ORACLE:    { name: "Oracle",    ranking: 7,  color: "#A0764A", text: "text-[#A0764A]", bg: "bg-[#A0764A]/10" },
-    PHANTOM:   { name: "Phantom",   ranking: 8,  color: "#7A7A7E", text: "text-[#7A7A7E]", bg: "bg-[#7A7A7E]/10" },
-    ASCENDANT: { name: "Ascendant", ranking: 9,  color: "#C8A832", text: "text-[#C8A832]", bg: "bg-[#C8A832]/10" },
-    ETERNUS:   { name: "Eternus",   ranking: 10, color: "#40E8D8", text: "text-[#40E8D8]", bg: "bg-[#40E8D8]/10" },
+    INITIATE:  { name: "Initiate",  ranking: 1,  color: "#8B6914", text: "text-[#8B6914]", bg: "bg-[#8B6914]/10" },
+    SEEKER:    { name: "Seeker",    ranking: 2,  color: "#6B3A5E", text: "text-[#6B3A5E]", bg: "bg-[#6B3A5E]/10" },
+    ALCHEMIST: { name: "Alchemist", ranking: 3,  color: "#4A7A2E", text: "text-[#4A7A2E]", bg: "bg-[#4A7A2E]/10" },
+    ARCHANIST: { name: "Archanist", ranking: 4,  color: "#3DA53D", text: "text-[#3DA53D]", bg: "bg-[#3DA53D]/10" },
+    RITUALIST: { name: "Ritualist", ranking: 5,  color: "#7B8A8E", text: "text-[#7B8A8E]", bg: "bg-[#7B8A8E]/10" },
+    EMISSARY:  { name: "Emissary",  ranking: 6,  color: "#9B2D4E", text: "text-[#9B2D4E]", bg: "bg-[#9B2D4E]/10" },
+    ARCHON:    { name: "Archon",    ranking: 7,  color: "#6A4D8A", text: "text-[#6A4D8A]", bg: "bg-[#6A4D8A]/10" },
+    ORACLE:    { name: "Oracle",    ranking: 8,  color: "#A0764A", text: "text-[#A0764A]", bg: "bg-[#A0764A]/10" },
+    PHANTOM:   { name: "Phantom",   ranking: 9,  color: "#7A7A7E", text: "text-[#7A7A7E]", bg: "bg-[#7A7A7E]/10" },
+    ASCENDANT: { name: "Ascendant", ranking: 10,  color: "#C8A832", text: "text-[#C8A832]", bg: "bg-[#C8A832]/10" },
+    ETERNUS:   { name: "Eternus",   ranking: 11, color: "#40E8D8", text: "text-[#40E8D8]", bg: "bg-[#40E8D8]/10" },
 } as const;
 
 export const convertSteam32toSteam64 = (friend_code: string | number) => {
     return bigInt("76561197960265728").plus(friend_code).toString();
+}
+
+export const convertSteam64toSteam32 = (steam_id: string) => {
+    return bigInt(steam_id).minus("76561197960265728").toString();
 }
 
 export type Rank = typeof Rank[keyof typeof Rank];

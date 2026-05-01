@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { OrgRole, OrgMemberStatus, BestOf, ScrimmageStatus } from "@/app/api/graphql/types/graphql";
+import { OrgRole, OrgMemberStatus, BestOf, ScrimmageStatus, UserProfileQuery } from "@/app/api/graphql/types/graphql";
+import { ArrayElement } from "mongodb";
 
 type OrgMemberUser = { _id: string; name: string; mmr: number };
 type OrgMemberItem = {
@@ -68,14 +69,14 @@ export function OrgCard({
     org,
     scrims,
 }: {
-    org: OrgCardOrg;
+    org: NonNullable<NonNullable<UserProfileQuery["getUser"]>["organization"]>;
     scrims: OrgCardScrim[];
 }) {
     const coreIds = new Set(org.coreTeam.map((c) => c._id));
     const active = org.members.filter((m) => m.status === OrgMemberStatus.Active);
 
     const sorted = [...active].sort((a, b) => {
-        const rank = (m: OrgMemberItem) => {
+        const rank = (m: ArrayElement<NonNullable<NonNullable<UserProfileQuery["getUser"]>["organization"]>["members"]>) => {
             if (m.user._id === org.owner._id) return 0;
             if (m.orgRole === OrgRole.Manager) return 1;
             if (coreIds.has(m.user._id)) return 2;

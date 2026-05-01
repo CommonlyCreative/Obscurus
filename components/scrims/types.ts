@@ -1,12 +1,10 @@
+import { CreateScrimPageQuery } from "@/app/api/graphql/types/graphql";
 import { Rank } from "@/lib/deadlock";
+import { ArrayElement } from "@/lib/utils";
 
 export type Region = "NA" | "EU";
 
-export interface OrgMember {
-  _id: string;
-  name: string;
-  mmr: number;
-}
+export type OrgMember = ArrayElement<NonNullable<NonNullable<CreateScrimPageQuery["getUser"]>["organization"]>["members"]>
 
 export interface Scrim {
   id: number;

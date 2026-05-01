@@ -10,6 +10,7 @@ import { OrgScrimCalendar } from "@/components/org/OrgScrimCalendar";
 import { OrgScrimHistory } from "@/components/org/OrgScrimHistory";
 import { OrgInviteBanner } from "@/components/org/OrgInviteBanner";
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
+import { OrgAvailabilityPanel } from "@/components/org/OrgAvailabilityPanel";
 
 const OrgPageQuery = graphql(`
   query OrgPage($slug: String!) {
@@ -21,12 +22,19 @@ const OrgPageQuery = graphql(`
       createdAt
       owner { _id name }
       members {
-        user { _id name mmr }
+        user { _id name steam { id } }
         orgRole
         status
         joinedAt
       }
       coreTeam { _id }
+      blocks {
+        day
+        timesheets {
+          startTime
+          endTime
+        }
+      }
     }
   }
 `);
@@ -95,7 +103,13 @@ export default async function OrgPage({ params }: { params: Promise<{ slug: stri
                             <OrgScrimHistory orgId={org._id} scrims={orgScrims} />
                         </div>
                     </div>
-                    <div className="bg-surface border border-edge rounded-lg overflow-hidden">
+                    <OrgAvailabilityPanel
+                        orgId={org._id}
+                        slug={slug}
+                        isManager={isManager}
+                        blocks={org.blocks}
+                    />
+                    <div className="bg-surface border border-edge rounded-lg overflow-hidden mt-4">
                         <div className="px-5 py-4 border-b border-edge">
                             <div className="text-sm font-bold text-foreground">Scrim Calendar</div>
                             <div className="text-xs text-muted mt-0.5">Weekly schedule overview</div>

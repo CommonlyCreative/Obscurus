@@ -1,0 +1,63 @@
+{
+    "accountId": 169860603,
+    "winRate": 50.75,
+    "totalMatches": 266,
+    "averageMatchRankNumber": 104,
+    "averageMatchMvp": 5.92,
+    "mostCommonMvpRank": 1,
+    "avgMatchDurationMin": 31.2,
+    "avgKills": 6.35,
+    "avgDeaths": 5.74,
+    "avgAssists": 8.94,
+    "kdRatio": 1.11,
+    "kdaRatio": 2.66,
+    "accuracyPercentage": 54,
+    "headshotAccuracyPercentage": 15,
+    "killParticipationPercentage": 44,
+    "damagePerMinute": 846,
+    "damagePerLife": 6438,
+    "damageTakenPerMinute": 729,
+    "avgLastHits": 155.25,
+    "avgDenies": 2.75,
+    "avgNetWorth": 36663,
+    "soulsPerMinute": 1174,
+    "avgTowerDamage": 8294,
+    "towerDamagePerMinute": 270,
+    "playstyleScoresJson": "{\"Damage Dealer\":0.8,\"Tank\":0.2485,\"Farming\":0.8,\"Support\":0.2,\"Early Impact\":0.3711,\"Pusher\":0.7223}",
+    "rawPlaystyleScoresJson": "{\"Damage Dealer\":0.5578,\"Tank\":0.3048,\"Farming\":0.55,\"Support\":0.1676,\"Early Impact\":0.3533,\"Pusher\":0.4922}",
+    "mostPlayedHeroesJson": "[{\"heroId\":13,\"matches\":219,\"winRate\":52.51},{\"heroId\":7,\"matches\":36,\"winRate\":41.67},{\"heroId\":1,\"matches\":7,\"winRate\":42.86}]",
+    "lastUpdated": "2026-04-10T22:39:13.000+00:00",
+    "mostPlayedHeroes": [
+        {
+            "heroId": 13,
+            "matches": 219,
+            "winRate": 52.51
+        },
+        {
+            "heroId": 7,
+            "matches": 36,
+            "winRate": 41.67
+        },
+        {
+            "heroId": 1,
+            "matches": 7,
+            "winRate": 42.86
+        }
+    ],
+    "playstyleScores": {
+        "Damage Dealer": 0.8,
+        "Tank": 0.2485,
+        "Farming": 0.8,
+        "Support": 0.2,
+        "Early Impact": 0.3711,
+        "Pusher": 0.7223
+    },
+    "rawPlaystyleScores": {
+        "Damage Dealer": 0.5578,
+        "Tank": 0.3048,
+        "Farming": 0.55,
+        "Support": 0.1676,
+        "Early Impact": 0.3533,
+        "Pusher": 0.4922
+    }
+}

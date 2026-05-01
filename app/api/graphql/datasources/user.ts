@@ -108,11 +108,11 @@ export type DBUser = Omit<User, "scrimmages" | "organization" | "_id"> & {
     organization: string;
 }
 
-const DEFAULTS: Omit<DBUser, "_id" | "createdAt" | "updatedAt"> = {
+const DEFAULTS: Omit<DBUser, "_id" | "createdAt" | "updatedAt" | "stats"> = {
     online: false,
     name: "",
+    region: "NA",
     verified: false,
-    mmr: 0,
     organization: "",
     heroes: [],
     bio: undefined,

@@ -2,12 +2,13 @@
 
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
-import { InvitationStatus, MatchResult, MatchSide } from "@/app/api/graphql/types/graphql";
+import { GetScrimmageDetailQuery, InvitationStatus, MatchResult, MatchSide } from "@/app/api/graphql/types/graphql";
 import { cache } from "react";
 import { steam } from "@/lib/steam";
 import { LiveTeam } from "@/lib/socket/teams";
 import { APILimit } from "@/lib/actions/deadlockapi";
 import { db } from "@/lib/database/mongo";
+import { ArrayElement } from "@/lib/utils";
 
 const ReadyUpMutation = graphql(`
     mutation ReadyUp($scrimmage_id: String!, $side: MatchSide!) {
@@ -192,10 +193,9 @@ export async function cancelScrimmageAction(scrimmageId: string) {
     return cancelScrimmage;
 }
 
-export async function joinScrimmageAction(scrimmageId: string, orgId: string, team: string[]) {
+export async function joinScrimmageAction(scrimmageId: string, team: string[]) {
     const { joinScrimmage } = await grafbase.request(JoinScrimmageM, {
         scrimmage_id: scrimmageId,
-        org_id: orgId,
         team,
     });
     return joinScrimmage;
@@ -208,11 +208,15 @@ export async function leaveScrimmageAction(scrimmageId: string, orgId: string) {
     return leaveScrimmage;
 }
 
-export async function declineChallengeAction(scrimmageId: string, orgId: string) {
+type Invitation = ArrayElement<NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["invitations"]> | null;
+
+export async function declineChallengeAction(scrimmageId: string, orgId: string, invitation?: Invitation) {
     const { declineScrimmageChallenge } = await grafbase.request(DeclineChallengeMutation, {
         scrimmage_id: scrimmageId,
         org_id: orgId,
     });
+    if (invitation)
+        respondToInvitationAction(invitation._id, InvitationStatus.Declined)
     return declineScrimmageChallenge;
 }
 
@@ -233,11 +237,13 @@ export async function acceptChallengeAction(scrimmageId: string, orgId: string) 
     return acceptScrimmageChallenge;
 }
 
-export async function acceptChallengeWithRosterAction(scrimmageId: string, orgId: string, team: string[]) {
+export async function acceptChallengeWithRosterAction(scrimmageId: string, orgId: string, team: string[], invitation?: Invitation) {
     await grafbase.request(AcceptChallengeMutation, { scrimmage_id: scrimmageId, org_id: orgId });
     const { setOpponentRoster } = await grafbase.request(SetOpponentRosterM, {
         input: { scrimmage_id: scrimmageId, org_id: orgId, team },
     });
+    if (invitation)
+        respondToInvitationAction(invitation._id, InvitationStatus.Declined)
     return setOpponentRoster;
 }
 
@@ -264,6 +270,6 @@ export async function deleteLimit(match_id: string) {
 }
 
 export async function updateLimit({ match_id, limit, remaining, reset_in, last_request, past_request }: APILimit) {
-    const update = await collection.updateOne({ match_id }, { $set: { match_id, limit, remaining, reset_in, last_request, past_request }}, { upsert: true })
+    const update = await collection.updateOne({ match_id }, { $set: { match_id, limit, remaining, reset_in, last_request, past_request } }, { upsert: true })
     return update.modifiedCount > 0;
 }

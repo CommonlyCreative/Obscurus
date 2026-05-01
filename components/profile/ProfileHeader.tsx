@@ -19,7 +19,7 @@ export function ProfileHeader({
     heroes: DeadlockHero[];
     editHref?: string;
 }) {
-    const rank = getRankByMMR(profile.mmr) ?? { rank: Rank.INITIATE, division: 1 };
+    const rank = getRankByMMR(profile.stats?.mmr ?? 0) ?? { rank: Rank.INITIATE, division: 1 };
     return (
         <div className="border-b border-edge bg-surface">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

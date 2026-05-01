@@ -11,12 +11,17 @@ import { findInvites, isActiveMember, useTeamSocket } from "@/hooks/useTeamSocke
 function InviteCard({
     invite,
     userName,
-    userMmr,
+    userStats,
     profileId,
 }: {
     invite: LiveTeam;
     userName: string;
-    userMmr: number;
+    userStats: {
+        division: number;
+        rank: {
+            name: string;
+        };
+    } | null | undefined;
     profileId: string;
 }) {
     const [acceptPending, startAccept] = useTransition();
@@ -77,11 +82,16 @@ function InviteCard({
 
 export function ProfileTeamInvite({
     userName,
-    userMmr,
+    userStats,
     profileId,
 }: {
     userName: string;
-    userMmr: number;
+    userStats: {
+        division: number;
+        rank: {
+            name: string;
+        };
+    } | null | undefined;
     profileId: string;
 }) {
     const { teams: socketTeams } = useTeamSocket([profileId])
@@ -97,7 +107,7 @@ export function ProfileTeamInvite({
                     key={invite.leaderId}
                     invite={invite}
                     userName={userName}
-                    userMmr={userMmr}
+                    userStats={userStats}
                     profileId={profileId}
                 />
             ))}

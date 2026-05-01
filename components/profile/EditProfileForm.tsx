@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
-import { Hero, Rank, getRankByMMR, calculateMMR } from "@/lib/deadlock";
+import { Hero, Rank, getRankByMMR, calculateMMR, convertSteam32toSteam64, convertSteam64toSteam32 } from "@/lib/deadlock";
 import { EditProfilePageQuery, OrgRole } from "@/app/api/graphql/types/graphql";
 import { ArrayElement, cn } from "@/lib/utils";
+import ranks from "@/lib/types/deadlock/ranks.json"
 import {
     updateProfileAction,
     setCoreTeamAction,
@@ -19,6 +20,7 @@ import {
 import { DeadlockHero } from "@/lib/types/deadlock/heroes";
 import { authClient } from "@/lib/database/auth-client";
 import { DisconnectSteamButton } from "./DisconnectSteamButton";
+import { GoogleIcon } from "@/components/shared/GoogleIcon";
 import Image from "next/image";
 import {
     Combobox,
@@ -44,6 +46,8 @@ import {
 } from "@/components/ui/dialog"
 import { InputGroupAddon } from "../ui/input-group";
 import { UserRoundPlus } from "lucide-react";
+import { getRankImage } from "@/lib/actions/deadlockapi";
+import Link from "next/link";
 
 const ALL_HEROES = Object.values(Hero);
 const ALL_RANKS = Object.values(Rank);
@@ -65,7 +69,6 @@ export type OrgUserSearch = {
 interface OrgMemberEntry {
     _id: string;
     name: string;
-    mmr: number;
     orgRole: OrgRole;
 }
 
@@ -79,10 +82,10 @@ interface OrgProp {
 
 interface Props {
     userId: string;
+    stats: NonNullable<EditProfilePageQuery["getUser"]>["stats"]
     steam: NonNullable<EditProfilePageQuery["getUser"]>["steam"];
     users: OrgUserSearch;
     heroes: DeadlockHero[];
-    initialMmr: number;
     initialHeroes: number[];
     initialBio: string;
     org: OrgProp | null;
@@ -107,23 +110,19 @@ function SectionCard({ title, subtitle, children }: {
 
 export function EditProfileForm({
     userId,
-    initialMmr,
     initialHeroes,
     initialBio,
     heroes,
     org,
     steam,
     users,
+    stats,
     isManager,
 }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [profileError, setProfileError] = useState<string | null>(null);
     const [profileSuccess, setProfileSuccess] = useState(false);
-
-    const initialRankInfo = getRankByMMR(initialMmr) ?? { rank: Rank.INITIATE, division: 0 };
-    const [selectedRank, setSelectedRank] = useState<Rank>(initialRankInfo.rank);
-    const [division, setDivision] = useState<number>(initialRankInfo.division);
 
     const [selectedHeroes, setSelectedHeroes] = useState<Set<number>>(
         new Set(initialHeroes)
@@ -158,6 +157,11 @@ export function EditProfileForm({
 
     const [syncPending, startSyncTransition] = useTransition();
     const [syncSuccess, setSyncSuccess] = useState(false);
+    const rankImage = getRankImage(stats?.mmr ?? 0)
+
+    const [linkedAccounts, setLinkedAccounts] = useState<Array<{ providerId: string }>>([]);
+    const [accountsLoading, setAccountsLoading] = useState(true);
+    const [googleDisconnectError, setGoogleDisconnectError] = useState<string | null>(null);
 
     function toggleHero(id: number) {
         setSelectedHeroes((prev) => {
@@ -195,11 +199,10 @@ export function EditProfileForm({
     function handleSaveProfile() {
         setProfileError(null);
         setProfileSuccess(false);
-        const mmr = calculateMMR(selectedRank, division);
         startTransition(async () => {
             try {
-                await updateProfileAction({ userId, mmr, heroes: Array.from(selectedHeroes), bio });
-                await authClient.updateUser({ mmr, heroes: Array.from(selectedHeroes), bio });
+                await updateProfileAction({ userId, heroes: Array.from(selectedHeroes), bio });
+                await authClient.updateUser({ heroes: Array.from(selectedHeroes), bio });
                 setProfileSuccess(true);
                 router.refresh();
             } catch {
@@ -296,6 +299,25 @@ export function EditProfileForm({
         });
     }
 
+    useEffect(() => {
+        authClient.listAccounts().then(({ data }) => {
+            if (data) setLinkedAccounts(data);
+            setAccountsLoading(false);
+        });
+    }, []);
+
+    const googleConnected = linkedAccounts.some(a => a.providerId === "google");
+
+    async function handleGoogleDisconnect() {
+        setGoogleDisconnectError(null);
+        const { error } = await authClient.unlinkAccount({ providerId: "google" });
+        if (error) {
+            setGoogleDisconnectError(error.message ?? "Failed to disconnect Google.");
+        } else {
+            setLinkedAccounts(prev => prev.filter(a => a.providerId !== "google"));
+        }
+    }
+
     const profileSections = (
         <>
             {/* Connected Accounts */}
@@ -333,57 +355,71 @@ export function EditProfileForm({
                         </a>
                     )}
                 </div>
+
+                {/* Google */}
+                <div className="flex items-center justify-between py-3 border-t border-edge">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-surface-2 border border-edge flex items-center justify-center shrink-0">
+                            <GoogleIcon size={16} />
+                        </div>
+                        <div>
+                            <div className="text-sm font-semibold text-foreground">Google</div>
+                            {accountsLoading ? (
+                                <div className="text-xs text-muted">Loading…</div>
+                            ) : googleConnected ? (
+                                <div className="text-xs text-muted">Connected · Calendar access granted</div>
+                            ) : (
+                                <div className="text-xs text-muted">Not connected</div>
+                            )}
+                        </div>
+                    </div>
+                    {!accountsLoading && (
+                        googleConnected ? (
+                            <div className="flex flex-col items-end gap-1">
+                                <button
+                                    type="button"
+                                    onClick={handleGoogleDisconnect}
+                                    className="px-3 py-1.5 text-xs font-semibold rounded border border-edge text-danger hover:border-danger/30 transition-colors"
+                                >
+                                    Disconnect
+                                </button>
+                                {googleDisconnectError && (
+                                    <p className="text-[10px] text-danger">{googleDisconnectError}</p>
+                                )}
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => authClient.linkSocial({
+                                    provider: "google",
+                                    callbackURL: window.location.href,
+                                })}
+                                className="px-3 py-1.5 text-xs font-semibold rounded border border-edge text-dimmed hover:border-primary/30 hover:text-foreground transition-colors"
+                            >
+                                Connect Google
+                            </button>
+                        )
+                    )}
+                </div>
             </section>
             {/* Rank */}
             <SectionCard
                 title="Rank"
-                subtitle={"Select your current rank and subdivision. " +
-                    "Due to ranks not being disclosed, I ask you in good faith to put your real rank until I get an API to calculate ranks."}
+                subtitle="Your rank is pulled directly from Statlocker.gg. You must be signed in to Steam to connect your rank."
             >
-                <div className="flex flex-wrap gap-2">
-                    {ALL_RANKS.map((rank) => (
-                        <button
-                            key={rank.name}
-                            type="button"
-                            onClick={() => setSelectedRank(rank)}
-                            className={cn(
-                                "px-3 py-1.5 rounded text-xs font-semibold border transition-colors",
-                                selectedRank === rank
-                                    ? "border-primary/60 bg-primary/10 text-primary"
-                                    : "border-edge text-muted hover:text-dimmed hover:border-foreground/20"
-                            )}
-                        >
-                            {rank.name}
-                        </button>
-                    ))}
-                </div>
-                <div className="flex gap-2">
-                    {DIVISIONS.map((d) => (
-                        <button
-                            key={d}
-                            type="button"
-                            onClick={() => setDivision(d)}
-                            className={cn(
-                                "flex-1 py-1.5 rounded text-xs font-medium border transition-colors",
-                                division === d
-                                    ? "border-primary/60 bg-primary/10 text-primary"
-                                    : "border-edge text-muted hover:text-dimmed"
-                            )}
-                        >
-                            {DIVISION_LABELS[d]}
-                        </button>
-                    ))}
-                </div>
-                <p className="text-xs text-muted">
-                    Current:{" "}
-                    <span className="text-foreground font-medium">
-                        {selectedRank.name}
-                        {division > 0 ? ` — Division ${division}` : ""}
-                    </span>{" "}
-                    <span className="text-dimmed">
-                        (MMR {calculateMMR(selectedRank, division)})
-                    </span>
-                </p>
+                {steam&&rankImage ? (
+                    <div className="flex justify-center">
+                        <img src={rankImage} className="h-24" />
+                    </div>
+                ) : (
+                    <p className="text-xs text-muted">
+                        Connect your
+                        <Link href="" className="text-foreground font-medium">
+                            Steam
+                        </Link>
+                        to pull your rank
+                    </p>
+                )}
             </SectionCard>
 
             {/* Heroes */}
@@ -466,11 +502,11 @@ export function EditProfileForm({
                 title={`Core Team — ${org.name}`}
                 subtitle={`Select up to 6 active members for the starting roster. ${coreTeamIds.size}/6 selected.`}
             >
-                {org.members.length === 0 ? (
+                {members.length === 0 ? (
                     <p className="text-xs text-muted">No active members yet.</p>
                 ) : (
                     <div className="space-y-1.5">
-                        {org.members.map((member) => {
+                        {members.map((member) => {
                             const inCore = coreTeamIds.has(member._id);
                             const disabled = !inCore && coreTeamIds.size >= 6;
                             return (
@@ -487,7 +523,6 @@ export function EditProfileForm({
                                     )}
                                 >
                                     <span className="font-medium">{member.name}</span>
-                                    <span className="text-xs text-muted">MMR {member.mmr}</span>
                                 </button>
                             );
                         })}

@@ -147,19 +147,25 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
                     )}
 
                     {/* Items */}
-                    {items.length > 0 && (
-                        <div>
-                            <p className="text-xs text-muted uppercase tracking-widest mb-3">Items</p>
-                            <div className="grid grid-flow-col grid-rows-2 auto-cols-fr gap-3">
-                                {items.map((item, x) => (
-                                    <div key={x} className="text-center">
+                    <div>
+                        <p className="text-xs text-muted uppercase tracking-widest mb-3">Items</p>
+                        <div className="grid grid-flow-col grid-rows-2 grid-cols-6 gap-3">
+                            {Array.from({ length: 12 }, (_, i) => {
+                                const item = items[i];
+                                return item ? (
+                                    <div key={i} className="text-center">
                                         <img src={item.shop_image} className="w-full aspect-square rounded-md border border-edge object-contain" alt={item.name} />
-                                        <div className="text-xs text-dimmed mt-1 leading-tight">{item.name}</div>
+                                        <div className="text-xs text-dimmed mt-1 leading-tight truncate">{item.name}</div>
                                     </div>
-                                ))}
-                            </div>
+                                ) : (
+                                    <div key={i}>
+                                        <div className="w-full aspect-square rounded-md border border-dashed border-edge bg-surface-2/50" />
+                                        <div className="mt-1 h-4" />
+                                    </div>
+                                );
+                            })}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         );

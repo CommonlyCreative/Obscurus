@@ -17,6 +17,8 @@ import {
     OrgRequest,
 } from "./server";
 import { asyncMap } from "@/lib/utils";
+import { getStatlockerRank } from "@/lib/actions/deadlockapi";
+import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
 
 const TimestampScalar = new GraphQLScalarType({
     name: "Timestamp",
@@ -55,6 +57,15 @@ export const resolvers: Resolvers = {
             } catch (error) {
                 throw new Error(`Failed to fetch scrimmages for user ${user._id}: ${error}`);
             }
+        },
+        stats: async (parent, _, { dataSources: { users } }) => {
+            const user = parent as any as DBUser;
+            if (!user.steam)return null;
+            const stat = await getStatlockerRank(convertSteam64toSteam32(user.steam.id))
+            if (!stat)return null;
+            const rankDisplay = getRankByMMR(stat.averageMatchRankNumber)
+            if (!rankDisplay)return null;
+            return { mmr: stat.averageMatchRankNumber, ...rankDisplay }
         },
         organization: async (parent, _, { dataSources: { organizations } }) => {
             const user = parent as any as DBUser;
@@ -449,8 +460,8 @@ export const resolvers: Resolvers = {
             return scrimmages.declineScrimmageChallenge(scrimmage_id, org_id) as any;
         },
         setOpponentRoster: async (_, { input }, { dataSources: { scrimmages } }) => {
-            const { scrimmage_id, org_id, team } = input;
-            return scrimmages.setOpponentRoster(scrimmage_id, org_id, team) as any;
+            const { scrimmage_id, team } = input;
+            return scrimmages.setOpponentRoster(scrimmage_id, team) as any;
         },
         updateRosterSlot: async (_, { input }, { dataSources: { scrimmages } }) => {
             const { scrimmage_id, side, remove_id, replace_id } = input;
@@ -545,7 +556,16 @@ export const resolvers: Resolvers = {
         removeCorePlayer: async (_, { org_id, user_id }, { dataSources: { organizations } }) => {
             return organizations.removeCorePlayer(org_id, user_id) as any as Promise<Organization | null>;
         },
-
+        updateAvailabilityBlocks: async (_, { org_id, blocks }, { dataSources: { organizations } }) => {
+            return await organizations.updateAvailabilityBlocks(org_id, blocks) as any as WithId<Organization> | null;
+        },
+        // updateAvailabilityBlock: async (_, { org_id, block }, { dataSources: { organizations } }) => {
+        //     const org = await organizations.addAvailabilityBlock(org_id, block);
+        //     return org as any as WithId<Organization> | null;
+        // },
+        addException: async (_, { org_id, excpetion }, { dataSources: { organizations } }) => {
+            return organizations.addException(org_id, excpetion) as any as Promise<WithId<Organization> | null>;
+        },
         // --- Scrimmage Invitations ---
         respondToInvitation: async (_, { input }, { dataSources: { scrimmages } }) => {
             return scrimmages.respondToInvitation(input.invitation_id, input.status as any) as any;

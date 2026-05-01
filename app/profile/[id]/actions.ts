@@ -87,6 +87,24 @@ export async function notifyTeamInviteResponseAction(
     return result.addNotification ?? null;
 }
 
+export async function notifyScrimmageInvitation(user_id: string, teamName: string) {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user) throw new Error("Unauthorized");
+
+    const responderName = session.user.name;
+    const result = await grafbase.request(SendNotificationM, {
+        input: {
+            recipient: user_id,
+            type: NotificationType.General,
+            title: "You have a scrimmage invitation",
+            description: `${teamName} challenged you to a scrimmage.`,
+            senderName: responderName,
+        },
+    });
+
+    return result.addNotification ?? null;
+}
+
 const GetAllTeamUsers = graphql(`
   query GetAllTeamUsers {
     getUsers {

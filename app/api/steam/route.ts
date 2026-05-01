@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         console.log("Steam is already registered", found._id, found.steam?.username);
         redirect("/")
     }
-    
+
     await grafbase.request(UpdateUser, { user_id: session.user.id, input: { steam: { id: steamId, username, avatar } } });
 
     return redirect("/profile/"+session.user.id+"/edit")

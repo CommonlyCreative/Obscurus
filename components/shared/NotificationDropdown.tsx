@@ -153,7 +153,7 @@ export function NotificationDropdown({ userId }: { userId: string }) {
         <div className="relative" ref={ref}>
             <button
                 onClick={() => setOpen(o => !o)}
-                className="relative flex items-center justify-center w-8 h-8 rounded-md hover:bg-surface transition-colors text-muted hover:text-foreground"
+                className="relative cursor-pointer flex items-center justify-center w-8 h-8 rounded-md hover:bg-surface transition-colors text-muted hover:text-foreground"
                 aria-label="Notifications"
             >
                 <BellIcon />

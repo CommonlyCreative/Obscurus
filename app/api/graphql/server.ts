@@ -38,6 +38,24 @@ export enum ApplicantStatus {
   Selected = 'SELECTED'
 }
 
+export type AvailabilityBlock = {
+  __typename?: 'AvailabilityBlock';
+  day: Day;
+  exception?: Maybe<AvailabilityException>;
+  timesheets?: Maybe<Array<Timesheet>>;
+};
+
+export type AvailabilityBlockInput = {
+  day: Day;
+  timesheets?: InputMaybe<Array<TimesheetInput>>;
+};
+
+export type AvailabilityException = {
+  __typename?: 'AvailabilityException';
+  date: Scalars['Timestamp']['output'];
+  timesheet: Array<Timesheet>;
+};
+
 export type Balance = {
   __typename?: 'Balance';
   credits: Scalars['Int']['output'];
@@ -136,6 +154,16 @@ export type CustomerInput = {
   user_id: Scalars['String']['input'];
 };
 
+export enum Day {
+  Friday = 'FRIDAY',
+  Monday = 'MONDAY',
+  Saturday = 'SATURDAY',
+  Sunday = 'SUNDAY',
+  Thursday = 'THURSDAY',
+  Tuesday = 'TUESDAY',
+  Wednesday = 'WEDNESDAY'
+}
+
 export type Disputes = {
   __typename?: 'Disputes';
   _id: Scalars['ID']['output'];
@@ -150,6 +178,12 @@ export enum EventProcessingStatus {
   Processing = 'PROCESSING',
   Received = 'RECEIVED'
 }
+
+export type ExceptionInput = {
+  date: Scalars['Timestamp']['input'];
+  day?: InputMaybe<Day>;
+  timesheets: Array<TimesheetInput>;
+};
 
 export enum InvitationStatus {
   Accepted = 'ACCEPTED',
@@ -191,7 +225,9 @@ export type Mutation = {
   _empty?: Maybe<Scalars['String']['output']>;
   acceptOrgInvite?: Maybe<OrganizationMember>;
   acceptScrimmageChallenge?: Maybe<Scrimmage>;
+  addAvailabilityBlock?: Maybe<Organization>;
   addCorePlayer?: Maybe<Organization>;
+  addException?: Maybe<Organization>;
   addNotification?: Maybe<Notification>;
   adjustCredits?: Maybe<CreditTransaction>;
   applyToSubstituteRequest?: Maybe<SubApplicant>;
@@ -233,6 +269,7 @@ export type Mutation = {
   submitOrgRequest?: Maybe<OrgRequest>;
   transferOwnership?: Maybe<Organization>;
   unready?: Maybe<Scrimmage>;
+  updateAvailabilityBlocks?: Maybe<Organization>;
   updateMemberRole?: Maybe<OrganizationMember>;
   updateOrganization?: Maybe<Organization>;
   updateRosterSlot?: Maybe<Scrimmage>;
@@ -255,9 +292,21 @@ export type MutationAcceptScrimmageChallengeArgs = {
 };
 
 
+export type MutationAddAvailabilityBlockArgs = {
+  block: AvailabilityBlockInput;
+  org_id: Scalars['String']['input'];
+};
+
+
 export type MutationAddCorePlayerArgs = {
   org_id: Scalars['String']['input'];
   user_id: Scalars['String']['input'];
+};
+
+
+export type MutationAddExceptionArgs = {
+  excpetion: ExceptionInput;
+  org_id: Scalars['String']['input'];
 };
 
 
@@ -494,6 +543,12 @@ export type MutationUnreadyArgs = {
 };
 
 
+export type MutationUpdateAvailabilityBlocksArgs = {
+  blocks: Array<AvailabilityBlockInput>;
+  org_id: Scalars['String']['input'];
+};
+
+
 export type MutationUpdateMemberRoleArgs = {
   orgRole: OrgRole;
   org_id: Scalars['String']['input'];
@@ -588,6 +643,7 @@ export enum OrgRole {
 export type Organization = {
   __typename?: 'Organization';
   _id: Scalars['ID']['output'];
+  blocks: Array<AvailabilityBlock>;
   coreTeam: Array<User>;
   createdAt: Scalars['Timestamp']['output'];
   description?: Maybe<Scalars['String']['output']>;
@@ -817,6 +873,12 @@ export type QuerySearchOrganizationsArgs = {
   query: Scalars['String']['input'];
 };
 
+export type Rank = {
+  __typename?: 'Rank';
+  name: Scalars['String']['output'];
+  ranking?: Maybe<Scalars['Int']['output']>;
+};
+
 export enum RefundReason {
   CustomerRequest = 'CUSTOMER_REQUEST',
   Duplicate = 'DUPLICATE',
@@ -909,9 +971,16 @@ export type SendNotificationInput = {
 };
 
 export type SetOpponentRosterInput = {
-  org_id: Scalars['String']['input'];
+  org_id?: InputMaybe<Scalars['String']['input']>;
   scrimmage_id: Scalars['String']['input'];
   team: Array<Scalars['String']['input']>;
+};
+
+export type Stats = {
+  __typename?: 'Stats';
+  division: Scalars['Int']['output'];
+  mmr: Scalars['Int']['output'];
+  rank: Rank;
 };
 
 export type Steam = {
@@ -999,6 +1068,17 @@ export type TeamInput = {
   leader: Scalars['String']['input'];
   members: Array<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+};
+
+export type Timesheet = {
+  __typename?: 'Timesheet';
+  endTime: Scalars['Timestamp']['output'];
+  startTime: Scalars['Timestamp']['output'];
+};
+
+export type TimesheetInput = {
+  endTime: Scalars['Timestamp']['input'];
+  startTime: Scalars['Timestamp']['input'];
 };
 
 export type Transaction = {
@@ -1145,13 +1225,13 @@ export type User = {
   blockInvites?: Maybe<Scalars['Boolean']['output']>;
   createdAt: Scalars['Timestamp']['output'];
   heroes: Array<Scalars['Int']['output']>;
-  mmr: Scalars['Int']['output'];
   name: Scalars['String']['output'];
   online: Scalars['Boolean']['output'];
   organization?: Maybe<Organization>;
-  region?: Maybe<Scalars['String']['output']>;
+  region: Scalars['String']['output'];
   role: Role;
   scrimmages: Array<Scrimmage>;
+  stats?: Maybe<Stats>;
   steam?: Maybe<Steam>;
   updatedAt: Scalars['Timestamp']['output'];
   verified: Scalars['Boolean']['output'];
@@ -1258,6 +1338,9 @@ export type DirectiveResolverFn<TResult = Record<PropertyKey, never>, TParent = 
 export type ResolversTypes = ResolversObject<{
   Adjustment: ResolverTypeWrapper<Adjustment>;
   ApplicantStatus: ApplicantStatus;
+  AvailabilityBlock: ResolverTypeWrapper<AvailabilityBlock>;
+  AvailabilityBlockInput: AvailabilityBlockInput;
+  AvailabilityException: ResolverTypeWrapper<AvailabilityException>;
   Balance: ResolverTypeWrapper<Balance>;
   BalanceInput: BalanceInput;
   BestOf: BestOf;
@@ -1270,8 +1353,10 @@ export type ResolversTypes = ResolversObject<{
   CreditTxType: CreditTxType;
   Customer: ResolverTypeWrapper<Customer>;
   CustomerInput: CustomerInput;
+  Day: Day;
   Disputes: ResolverTypeWrapper<Disputes>;
   EventProcessingStatus: EventProcessingStatus;
+  ExceptionInput: ExceptionInput;
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   InvitationStatus: InvitationStatus;
@@ -1292,6 +1377,7 @@ export type ResolversTypes = ResolversObject<{
   Processor: Processor;
   PurchaseCreditsInput: PurchaseCreditsInput;
   Query: ResolverTypeWrapper<Record<PropertyKey, never>>;
+  Rank: ResolverTypeWrapper<Rank>;
   RefundReason: RefundReason;
   RespondToInvitationInput: RespondToInvitationInput;
   Role: Role;
@@ -1302,6 +1388,7 @@ export type ResolversTypes = ResolversObject<{
   ScrimmageStatus: ScrimmageStatus;
   SendNotificationInput: SendNotificationInput;
   SetOpponentRosterInput: SetOpponentRosterInput;
+  Stats: ResolverTypeWrapper<Stats>;
   Steam: ResolverTypeWrapper<Steam>;
   SteamInput: SteamInput;
   String: ResolverTypeWrapper<Scalars['String']['output']>;
@@ -1313,6 +1400,8 @@ export type ResolversTypes = ResolversObject<{
   SubstituteRequestInput: SubstituteRequestInput;
   Team: ResolverTypeWrapper<Team>;
   TeamInput: TeamInput;
+  Timesheet: ResolverTypeWrapper<Timesheet>;
+  TimesheetInput: TimesheetInput;
   Timestamp: ResolverTypeWrapper<Scalars['Timestamp']['output']>;
   Transaction: ResolverTypeWrapper<Transaction>;
   TransactionInput: TransactionInput;
@@ -1335,6 +1424,9 @@ export type ResolversTypes = ResolversObject<{
 /** Mapping between all available schema types and the resolvers parents */
 export type ResolversParentTypes = ResolversObject<{
   Adjustment: Adjustment;
+  AvailabilityBlock: AvailabilityBlock;
+  AvailabilityBlockInput: AvailabilityBlockInput;
+  AvailabilityException: AvailabilityException;
   Balance: Balance;
   BalanceInput: BalanceInput;
   Boolean: Scalars['Boolean']['output'];
@@ -1345,6 +1437,7 @@ export type ResolversParentTypes = ResolversObject<{
   Customer: Customer;
   CustomerInput: CustomerInput;
   Disputes: Disputes;
+  ExceptionInput: ExceptionInput;
   ID: Scalars['ID']['output'];
   Int: Scalars['Int']['output'];
   LogStripeEventInput: LogStripeEventInput;
@@ -1357,12 +1450,14 @@ export type ResolversParentTypes = ResolversObject<{
   PlaceWagerInput: PlaceWagerInput;
   PurchaseCreditsInput: PurchaseCreditsInput;
   Query: Record<PropertyKey, never>;
+  Rank: Rank;
   RespondToInvitationInput: RespondToInvitationInput;
   Scrimmage: Scrimmage;
   ScrimmageInvitation: ScrimmageInvitation;
   ScrimmageInvitationInput: ScrimmageInvitationInput;
   SendNotificationInput: SendNotificationInput;
   SetOpponentRosterInput: SetOpponentRosterInput;
+  Stats: Stats;
   Steam: Steam;
   SteamInput: SteamInput;
   String: Scalars['String']['output'];
@@ -1373,6 +1468,8 @@ export type ResolversParentTypes = ResolversObject<{
   SubstituteRequestInput: SubstituteRequestInput;
   Team: Team;
   TeamInput: TeamInput;
+  Timesheet: Timesheet;
+  TimesheetInput: TimesheetInput;
   Timestamp: Scalars['Timestamp']['output'];
   Transaction: Transaction;
   TransactionInput: TransactionInput;
@@ -1399,6 +1496,17 @@ export type AdjustmentResolvers<ContextType = Context, ParentType extends Resolv
   stripeRefundId?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   transaction?: Resolver<ResolversTypes['Transaction'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
+}>;
+
+export type AvailabilityBlockResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AvailabilityBlock'] = ResolversParentTypes['AvailabilityBlock']> = ResolversObject<{
+  day?: Resolver<ResolversTypes['Day'], ParentType, ContextType>;
+  exception?: Resolver<Maybe<ResolversTypes['AvailabilityException']>, ParentType, ContextType>;
+  timesheets?: Resolver<Maybe<Array<ResolversTypes['Timesheet']>>, ParentType, ContextType>;
+}>;
+
+export type AvailabilityExceptionResolvers<ContextType = Context, ParentType extends ResolversParentTypes['AvailabilityException'] = ResolversParentTypes['AvailabilityException']> = ResolversObject<{
+  date?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
+  timesheet?: Resolver<Array<ResolversTypes['Timesheet']>, ParentType, ContextType>;
 }>;
 
 export type BalanceResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Balance'] = ResolversParentTypes['Balance']> = ResolversObject<{
@@ -1459,7 +1567,9 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   _empty?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   acceptOrgInvite?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationAcceptOrgInviteArgs, 'org_id' | 'user_id'>>;
   acceptScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationAcceptScrimmageChallengeArgs, 'org_id' | 'scrimmage_id'>>;
+  addAvailabilityBlock?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddAvailabilityBlockArgs, 'block' | 'org_id'>>;
   addCorePlayer?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddCorePlayerArgs, 'org_id' | 'user_id'>>;
+  addException?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddExceptionArgs, 'excpetion' | 'org_id'>>;
   addNotification?: Resolver<Maybe<ResolversTypes['Notification']>, ParentType, ContextType, RequireFields<MutationAddNotificationArgs, 'input'>>;
   adjustCredits?: Resolver<Maybe<ResolversTypes['CreditTransaction']>, ParentType, ContextType, RequireFields<MutationAdjustCreditsArgs, 'amount' | 'note' | 'user_id'>>;
   applyToSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubApplicant']>, ParentType, ContextType, RequireFields<MutationApplyToSubstituteRequestArgs, 'request_id'>>;
@@ -1501,6 +1611,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   submitOrgRequest?: Resolver<Maybe<ResolversTypes['OrgRequest']>, ParentType, ContextType, RequireFields<MutationSubmitOrgRequestArgs, 'input' | 'user_id'>>;
   transferOwnership?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationTransferOwnershipArgs, 'new_owner_id' | 'org_id'>>;
   unready?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationUnreadyArgs, 'scrimmage_id' | 'side'>>;
+  updateAvailabilityBlocks?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationUpdateAvailabilityBlocksArgs, 'blocks' | 'org_id'>>;
   updateMemberRole?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationUpdateMemberRoleArgs, 'orgRole' | 'org_id' | 'user_id'>>;
   updateOrganization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationUpdateOrganizationArgs, 'input' | 'org_id'>>;
   updateRosterSlot?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationUpdateRosterSlotArgs, 'input'>>;
@@ -1536,6 +1647,7 @@ export type OrgRequestResolvers<ContextType = Context, ParentType extends Resolv
 
 export type OrganizationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Organization'] = ResolversParentTypes['Organization']> = ResolversObject<{
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  blocks?: Resolver<Array<ResolversTypes['AvailabilityBlock']>, ParentType, ContextType>;
   coreTeam?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
@@ -1591,6 +1703,11 @@ export type QueryResolvers<ContextType = Context, ParentType extends ResolversPa
   searchOrganizations?: Resolver<Array<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<QuerySearchOrganizationsArgs, 'query'>>;
 }>;
 
+export type RankResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Rank'] = ResolversParentTypes['Rank']> = ResolversObject<{
+  name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
+  ranking?: Resolver<Maybe<ResolversTypes['Int']>, ParentType, ContextType>;
+}>;
+
 export type ScrimmageResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Scrimmage'] = ResolversParentTypes['Scrimmage']> = ResolversObject<{
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   bestOf?: Resolver<ResolversTypes['BestOf'], ParentType, ContextType>;
@@ -1625,6 +1742,12 @@ export type ScrimmageInvitationResolvers<ContextType = Context, ParentType exten
   status?: Resolver<ResolversTypes['InvitationStatus'], ParentType, ContextType>;
   substitute?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
   user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+}>;
+
+export type StatsResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Stats'] = ResolversParentTypes['Stats']> = ResolversObject<{
+  division?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  mmr?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
+  rank?: Resolver<ResolversTypes['Rank'], ParentType, ContextType>;
 }>;
 
 export type SteamResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Steam'] = ResolversParentTypes['Steam']> = ResolversObject<{
@@ -1678,6 +1801,11 @@ export type TeamResolvers<ContextType = Context, ParentType extends ResolversPar
   name?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
 }>;
 
+export type TimesheetResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Timesheet'] = ResolversParentTypes['Timesheet']> = ResolversObject<{
+  endTime?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
+  startTime?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
+}>;
+
 export interface TimestampScalarConfig extends GraphQLScalarTypeConfig<ResolversTypes['Timestamp'], any> {
   name: 'Timestamp';
 }
@@ -1727,13 +1855,13 @@ export type UserResolvers<ContextType = Context, ParentType extends ResolversPar
   blockInvites?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   heroes?: Resolver<Array<ResolversTypes['Int']>, ParentType, ContextType>;
-  mmr?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   online?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType>;
-  region?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  region?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   role?: Resolver<ResolversTypes['Role'], ParentType, ContextType>;
   scrimmages?: Resolver<Array<ResolversTypes['Scrimmage']>, ParentType, ContextType>;
+  stats?: Resolver<Maybe<ResolversTypes['Stats']>, ParentType, ContextType>;
   steam?: Resolver<Maybe<ResolversTypes['Steam']>, ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   verified?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
@@ -1752,6 +1880,8 @@ export type WagerResolvers<ContextType = Context, ParentType extends ResolversPa
 
 export type Resolvers<ContextType = Context> = ResolversObject<{
   Adjustment?: AdjustmentResolvers<ContextType>;
+  AvailabilityBlock?: AvailabilityBlockResolvers<ContextType>;
+  AvailabilityException?: AvailabilityExceptionResolvers<ContextType>;
   Balance?: BalanceResolvers<ContextType>;
   CreditPurchase?: CreditPurchaseResolvers<ContextType>;
   CreditTransaction?: CreditTransactionResolvers<ContextType>;
@@ -1764,13 +1894,16 @@ export type Resolvers<ContextType = Context> = ResolversObject<{
   Organization?: OrganizationResolvers<ContextType>;
   OrganizationMember?: OrganizationMemberResolvers<ContextType>;
   Query?: QueryResolvers<ContextType>;
+  Rank?: RankResolvers<ContextType>;
   Scrimmage?: ScrimmageResolvers<ContextType>;
   ScrimmageInvitation?: ScrimmageInvitationResolvers<ContextType>;
+  Stats?: StatsResolvers<ContextType>;
   Steam?: SteamResolvers<ContextType>;
   StripeEvent?: StripeEventResolvers<ContextType>;
   SubApplicant?: SubApplicantResolvers<ContextType>;
   SubstituteRequest?: SubstituteRequestResolvers<ContextType>;
   Team?: TeamResolvers<ContextType>;
+  Timesheet?: TimesheetResolvers<ContextType>;
   Timestamp?: GraphQLScalarType;
   Transaction?: TransactionResolvers<ContextType>;
   TransactionMethod?: TransactionMethodResolvers<ContextType>;

@@ -3,8 +3,11 @@ import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { ScrimDetail } from "@/components/scrims/ScrimDetail";
+import { Scrim, ScrimDetail, ScrimDetailProps } from "@/components/scrims/ScrimDetail";
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
+import { convertSteam64toSteam32 } from "@/lib/deadlock";
+import { getStatlockerRanks } from "@/lib/actions/deadlockapi";
+import { ArrayElement } from "@/lib/utils";
 
 const GetViewerOrgQuery = graphql(`
     query GetViewerOrg($user_id: String!) {
@@ -37,29 +40,29 @@ const GetScrimmageQuery = graphql(`
                 startedAt
                 concludedAt
             }
-            host { _id name mmr }
+            host { _id name steam { id } }
             hostOrg { _id name }
             hostTeam {
-                leader { _id name mmr }
-                members { _id name mmr }
+                leader { _id name steam { id } }
+                members { _id name steam { id } }
             }
             opponentOrg {
                 _id
                 name
-                coreTeam { _id name mmr }
+                coreTeam { _id name steam { id } }
                 members {
                     orgRole
                     user {
                         _id
                         name
-                        mmr
+                        steam { id }
                     }
                     status
                 }
             }
             opponentTeam {
-                leader { _id name mmr }
-                members { _id name mmr }
+                leader { _id name steam { id } }
+                members { _id name steam { id } }
             }
             invitations {
                 _id
@@ -83,6 +86,22 @@ export default async function ScrimPage({ params }: { params: Promise<{ id: stri
 
     if (!scrim) notFound();
 
+    const steamIds = scrim.opponentOrg?.members.map(member => convertSteam64toSteam32(member.user.steam?.id ?? "")) ?? []
+
+    const stats = await getStatlockerRanks(steamIds)
+
+    const opponentOrg = scrim.opponentOrg;
+
+    if (opponentOrg) {
+        opponentOrg.members = opponentOrg.members
+            .map(member => ({
+                ...member,
+                mmr: stats.find(stat => stat.accountId.toString() === convertSteam64toSteam32(member.user.steam?.id ?? ""))?.estimatedRankNumber ?? 0
+            } as ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & {
+                        mmr: number
+                    }))
+    }
+
     const viewerOrgId = viewerData?.getUser?.organization?._id ?? null;
     const isHost = user?.id === scrim.host._id;
     const hostMemberIds = scrim.hostTeam?.members.map((m) => m._id) ?? [];
@@ -91,7 +110,7 @@ export default async function ScrimPage({ params }: { params: Promise<{ id: stri
     const isOpponentMember = user ? opponentMemberIds.includes(user.id) : false;
     const isHostLeader = user?.id === scrim.hostTeam?.leader._id;
     const isOpponentLeader = user?.id === scrim.opponentTeam?.leader._id;
-    const isOpponentOrgManager = scrim.opponentOrg?.members.some(member => member.user._id === user?.id&& member.orgRole === OrgRole.Manager&&member.status === OrgMemberStatus.Active) ?? false;
+    const isOpponentOrgManager = scrim.opponentOrg?.members.some(member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active) ?? false;
 
     return (
         <main className="flex-1">
@@ -105,7 +124,7 @@ export default async function ScrimPage({ params }: { params: Promise<{ id: stri
                 isHostMember={isHostMember}
                 isOpponentMember={isOpponentMember}
                 hostOrgId={scrim.hostOrg?._id ?? null}
-                opponentOrg={scrim.opponentOrg ?? null}
+                opponentOrg={opponentOrg as ScrimDetailProps["opponentOrg"] ?? null}
                 isOpponentOrgManager={isOpponentOrgManager}
                 viewerOrgId={viewerOrgId}
             />

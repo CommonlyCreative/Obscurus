@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { OrgRole, OrgMemberStatus } from "@/app/api/graphql/types/graphql";
 
-type OrgMemberUser = { _id: string; name: string; mmr: number };
+type OrgMemberUser = { _id: string; name: string; };
 type OrgMember = {
     user: OrgMemberUser;
     orgRole: OrgRole;
@@ -121,6 +121,9 @@ export function OrgRosterPanel({
                                         {isMe && (
                                             <span className="text-muted font-normal"> (you)</span>
                                         )}
+                                        {/* TODO {isMe && (
+                                            <span className="text-muted font-normal"> (you)</span>
+                                        )} */}
                                     </span>
                                 </div>
 
@@ -140,7 +143,6 @@ export function OrgRosterPanel({
                                             Core
                                         </span>
                                     )}
-                                    <span className="text-[10px] text-muted ml-1">{member.user.mmr}</span>
                                 </div>
                             </Link>
                         );

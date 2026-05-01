@@ -1,16 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { RosterSelector } from "./RosterSelector";
 import { LiveTeamPicker } from "./LiveTeamPicker";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
-import { createScrimmageAction } from "@/app/scrims/create/actions";
+import { createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
 import { BestOf, CreateScrimPageQuery, MatchSide, ScrimmageInvitationInput } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
 import type { OrgMember, Region } from "./types";
 import { useLiveTeams } from "@/hooks/useLiveTeams";
+import { OrgAvailabilityCalendar } from "./OrgAvailabilityCalendar";
+import { UserCalendarView } from "./UserCalendarView";
+import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
+import { socket } from "@/lib/socket/socket-client";
+import { notifyScrimmageInvitation } from "@/app/profile/[id]/actions";
 
 const BEST_OF_OPTIONS: { value: BestOf; label: string; sub: string }[] = [
     { value: BestOf.One, label: "Bo1", sub: "Single game" },
@@ -47,6 +52,13 @@ function SectionCard({ title, subtitle, children }: {
             {children}
         </section>
     );
+}
+
+const ENDTIME_CONVERSION = {
+    [BestOf.One]: 1 * 60 * 60 * 1000,
+    [BestOf.Three]: 2 * 60 * 60 * 1000,
+    [BestOf.Five]: 4 * 60 * 60 * 1000,
+    [BestOf.Unlimited]: 4 * 60 * 60 * 1000,
 }
 
 export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
@@ -88,7 +100,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
 
     const useOrgRoster = isManager && orgAffiliated;
     const rosterIds = useOrgRoster
-        ? roster.filter(Boolean).map((m) => m!._id)
+        ? roster.filter(Boolean).map((m) => m!.user._id)
         : (liveTeam?.members.map((m) => m.userId) ?? []);
 
     const rosterFull = rosterIds.length === 6;
@@ -98,33 +110,57 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
     function handleSubmit() {
         if (!canSubmit || isPending) return;
         setError(null);
-        
+
         startTransition(async () => {
             try {
                 const scheduledAt = scheduled && scheduledDate
-                    ? new Date(scheduledDate).getTime()
+                    ? new Date(scheduledDate)
                     : null;
+                let opponentOrg = await getOrganization(targetLeaderId ?? undefined);
+                if (scheduledAt && opponentOrg) {
+                    const endTime = new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf])
+                    const response = await insertCalendarInfo({
+                        summary: "Scrimmage vs. " + opponentOrg.name,
+                        startTime: scheduledAt.toISOString(),
+                        endTime: endTime.toISOString(),
+                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    })
 
-                const result = await createScrimmageAction({
-                    note,
-                    isPrivate,
-                    host_id: userId,
-                    wagerAmount,
-                    hostOrgId: orgAffiliated && org ? org._id : null,
-                    roster: rosterIds,
-                    orgAffiliated,
-                    targetLeaderId,
-                    scheduledAt,
-                    bestOf,
-                });
-
-                if (result) {
-                    router.push(`/scrims`);
-                } else {
-                    setError("Failed to create scrimmage. Please try again.");
+                    const body = await response?.json();
+                    if (response?.status !== 200) {
+                        throw Error(`Unknown error ${body}`)
+                    }
                 }
-            } catch {
-                setError("Something went wrong. Please try again.");
+                try {
+                    const result = await createScrimmageAction({
+                        note,
+                        isPrivate,
+                        host_id: userId,
+                        wagerAmount,
+                        hostOrgId: orgAffiliated && org ? org._id : null,
+                        roster: rosterIds,
+                        orgAffiliated,
+                        targetLeaderId,
+                        opponentOrg_id: opponentOrg?._id ?? null,
+                        scheduledAt: scheduledAt?.getTime() ?? null,
+                        bestOf,
+                    });
+
+                    if (result) {
+                        router.push(`/scrims/${result._id}`);
+                        if (targetLeaderId) {
+                            const teamName = orgAffiliated && org ? org.name : liveTeam?.name ?? "Unknown Team";
+                            const notification = await notifyScrimmageInvitation(targetLeaderId, teamName)
+                            socket.emit("notify", notification)
+                        }
+                    } else {
+                        setError("Failed to create scrimmage. Please try again.");
+                    }
+                } catch {
+                    setError("Something went wrong. Please try again.");
+                }
+            } catch (err) {
+                setError(`Error scheduling Google calendar: [${err}]`)
             }
         });
     }
@@ -284,95 +320,131 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                                 />
                             </div>
 
-                            {/* Schedule */}
-                            <div className="space-y-3 pt-2 border-t border-edge">
-                                <h3 className="text-sm font-semibold text-foreground">Schedule</h3>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {([false, true] as const).map((sched) => (
-                                        <button
-                                            key={String(sched)}
-                                            type="button"
-                                            onClick={() => setScheduled(sched)}
-                                            className={cn(
-                                                "py-2 rounded-lg border text-xs font-semibold transition-colors",
-                                                scheduled === sched
-                                                    ? "border-primary/50 bg-primary/5 text-primary"
-                                                    : "border-edge text-muted hover:border-primary/30"
-                                            )}
-                                        >
-                                            {sched ? "Scheduled Time" : "ASAP"}
-                                        </button>
-                                    ))}
+                            {isPrivate && (
+                                /* Schedule */
+                                < div className="space-y-3 pt-2 border-t border-edge">
+                                    <h3 className="text-sm font-semibold text-foreground">Schedule</h3>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {([false, true] as const).map((sched) => (
+                                            <button
+                                                key={String(sched)}
+                                                type="button"
+                                                onClick={() => setScheduled(sched)}
+                                                className={cn(
+                                                    "py-2 rounded-lg border text-xs font-semibold transition-colors",
+                                                    scheduled === sched
+                                                        ? "border-primary/50 bg-primary/5 text-primary"
+                                                        : "border-edge text-muted hover:border-primary/30"
+                                                )}
+                                            >
+                                                {sched ? "Scheduled Time" : "ASAP"}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {scheduled && (
+                                        <input
+                                            type="datetime-local"
+                                            value={scheduledDate}
+                                            onChange={(e) => setScheduledDate(e.target.value)}
+                                            min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                                            className="bg-surface-2 border border-edge rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
+                                        />
+                                    )}
                                 </div>
-                                {scheduled && (
-                                    <input
-                                        type="datetime-local"
-                                        value={scheduledDate}
-                                        onChange={(e) => setScheduledDate(e.target.value)}
-                                        min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-                                        className="bg-surface-2 border border-edge rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
-                                    />
-                                )}
-                            </div>
+                            )}
+
 
                         </div>
                     )}
+                </SectionCard>
+            )
+            }
+
+            {/* ── Opponent availability (org-affiliated managers only) ── */}
+            {isManager && org && orgAffiliated && (
+                <SectionCard
+                    title="Opponent Availability"
+                    subtitle="See when other organizations are open to scrimmage. Click an org to hide it."
+                >
+                    <OrgAvailabilityCalendar
+                        orgs={(orgs ?? []).filter(o => o.coreTeam.length === 6)}
+                        currentOrgId={org._id}
+                    />
+                </SectionCard>
+            )}
+
+            {/* ── Your Google Calendar (org-affiliated managers only) ── */}
+            {isManager && org && orgAffiliated && (
+                <SectionCard
+                    title="Your Calendar"
+                    subtitle="Upcoming events from your Google Calendar to help you pick a time."
+                >
+                    <UserCalendarView userId={userId} />
                 </SectionCard>
             )}
 
             {/* ── Private: target team ── */}
-            {isPrivate && (
-                <SectionCard
-                    title="Target Team"
-                    subtitle="Select the online team you want to challenge."
-                >
-                    <LiveTeamPicker orgAffiliated={orgAffiliated} org={org} orgs={orgs} isManager={isManager} userId={userId} selected={targetLeaderId} onSelect={setTargetLeaderId} />
-                </SectionCard>
-            )}
+            {
+                isPrivate && (
+                    <SectionCard
+                        title="Target Team"
+                        subtitle="Select the online team you want to challenge."
+                    >
+                        <LiveTeamPicker orgAffiliated={orgAffiliated} org={org} orgs={orgs} isManager={isManager} userId={userId} selected={targetLeaderId} onSelect={setTargetLeaderId} />
+                    </SectionCard>
+                )
+            }
 
             {/* ── Live team (non-org-roster path) ── */}
-            {!useOrgRoster && (
-                <SectionCard
-                    title="Your Team"
-                    subtitle="Your current online team will be used as the roster."
-                >
-                    {liveTeam ? (
-                        <div className="space-y-1.5">
-                            {liveTeam.members.map((m, i) => (
-                                <div
-                                    key={i}
-                                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-2 border border-edge"
-                                >
-                                    <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-foreground shrink-0">
-                                        {m.name.charAt(0)}
-                                    </div>
-                                    <span className="text-sm text-foreground flex-1 truncate">{m.name}</span>
-                                    <span className="text-xs text-muted">{m.mmr} MMR</span>
-                                </div>
-                            ))}
-                            {liveTeam.members.length < 6 && (
-                                <p className="text-xs text-danger pt-1">
-                                    Need {6 - liveTeam.members.length} more player
-                                    {6 - liveTeam.members.length !== 1 ? "s" : ""} to create a scrimmage.
-                                </p>
-                            )}
-                        </div>
-                    ) : (
-                        <p className="text-xs text-muted">
-                            You don't have an active online team.{" "}
-                            <Button variant="ghost" href={`/profile/${userId}`} className="text-xs inline p-0">
-                                Go to your profile
-                            </Button>{" "}
-                            to start one.
-                        </p>
-                    )}
-                </SectionCard>
-            )}
+            {
+                !useOrgRoster && (
+                    <SectionCard
+                        title="Your Team"
+                        subtitle="Your current online team will be used as the roster."
+                    >
+                        {liveTeam ? (
+                            <div className="space-y-1.5">
+                                {liveTeam.members.map((m, i) => {
+                                    const rank = getRankByMMR(m.mmr)
+                                    return (
+                                        <div
+                                            key={i}
+                                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-2 border border-edge"
+                                        >
+                                            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-foreground shrink-0">
+                                                {m.name.charAt(0)}
+                                            </div>
+                                            <span className="text-sm text-foreground flex-1 truncate">{m.name}</span>
+                                            {rank && <span className="text-xs text-muted">{`${rank.rank.name} ${rank.division}`}</span>}
+                                        </div>
+                                    )
+                                })}
+                                {liveTeam.members.length < 6 && (
+                                    <p className="text-xs text-danger pt-1">
+                                        Need {6 - liveTeam.members.length} more player
+                                        {6 - liveTeam.members.length !== 1 ? "s" : ""} to create a scrimmage.
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-muted">
+                                You don't have an active online team.{" "}
+                                <Button variant="ghost" href={`/profile/${userId}`} className="text-xs inline p-0">
+                                    Go to your profile
+                                </Button>{" "}
+                                to start one.
+                            </p>
+                        )}
+                    </SectionCard>
+                )
+            }
 
             {/* ── Error ── */}
-            {error && (
-                <p className="text-xs text-danger px-1">{error}</p>
-            )}
+            {
+                error && (
+                    <p className="text-xs text-danger px-1">{error}</p>
+                )
+            }
 
             {/* ── Submit ── */}
             <div className="flex items-center gap-3 pt-1">
@@ -402,6 +474,6 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                 )}
             </div>
 
-        </div>
+        </div >
     );
 }

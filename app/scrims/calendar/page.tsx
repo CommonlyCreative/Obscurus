@@ -15,7 +15,7 @@ const ScrimCalendarPageQuery = graphql(`
         name
         members {
             _id
-            mmr
+            steam { id }
             name
         }
       }

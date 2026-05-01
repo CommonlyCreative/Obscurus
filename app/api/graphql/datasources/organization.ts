@@ -3,6 +3,8 @@ import {
     Organization, OrganizationMember,
     OrgRole, OrgMemberStatus,
     CreateOrganizationInput, UpdateOrganizationInput,
+    AvailabilityBlockInput,
+    ExceptionInput,
 } from "../server";
 import { merge } from "lodash";
 import { convertNullsToUndefined } from "@/lib/utils";
@@ -35,19 +37,23 @@ export class OrganizationDataSource {
 
     async searchOrganizations(query: string, limit = 20): Promise<DBOrganization[]> {
         return this.collection
-            .find({ $or: [
-                { name: { $regex: query, $options: "i" } },
-                { slug: { $regex: query, $options: "i" } },
-            ]})
+            .find({
+                $or: [
+                    { name: { $regex: query, $options: "i" } },
+                    { slug: { $regex: query, $options: "i" } },
+                ]
+            })
             .limit(limit)
             .toArray();
     }
 
     getUserOrgInvitations(user_id: string) {
-        return this.collection.find({ $and: [
-            { "members.user": { $in: [user_id] } },
-            { "members.status": "INVITED" },
-        ] }).toArray() as Promise<WithId<DBOrganization>[] | null>;
+        return this.collection.find({
+            $and: [
+                { "members.user": { $in: [user_id] } },
+                { "members.status": "INVITED" },
+            ]
+        }).toArray() as Promise<WithId<DBOrganization>[] | null>;
     }
 
     getOrganization(_id: ObjectId | string) {
@@ -95,6 +101,7 @@ export class OrganizationDataSource {
             owner: owner_id,
             members: [],
             coreTeam: [],
+            blocks: [],
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
@@ -246,5 +253,28 @@ export class OrganizationDataSource {
         org.updatedAt = Date.now();
         await this.collection.updateOne({ _id: new ObjectId(org_id) }, { $set: { coreTeam: org.coreTeam, updatedAt: org.updatedAt } });
         return org;
+    }
+
+    async addAvailabilityBlock(org_id: ObjectId | string, block: AvailabilityBlockInput) {
+        const _id = new ObjectId(org_id);
+        return await this.collection.findOneAndUpdate({ _id }, { $set: { blocks: [block], updatedAt: Date.now() } });
+    }
+
+    async updateAvailabilityBlocks(org_id: ObjectId | string, blocks: AvailabilityBlockInput[]) {
+        return await this.collection.findOneAndUpdate({ _id: new ObjectId(org_id) }, { $set: { blocks, updatedAt: Date.now() } });
+    }
+
+    async addException(org_id: ObjectId | string, input: ExceptionInput) {
+        return await this.collection.findOneAndUpdate({ _id: new ObjectId(org_id), "blocks.day": input.day }, { $set: { "blocks.$.exception": { date: input.date, timesheets: input.timesheets }, updatedAt: Date.now() } });
+    }
+
+    async clearExceptions(org_id: ObjectId | string) {
+        return await this.collection.findOneAndUpdate({ _id: new ObjectId(org_id) }, {
+            $pull: {
+                blocks: {
+                    exception: { date: { $lt: Date.now() } }
+                }
+            }, $set: { updatedAt: Date.now() }
+        });
     }
 }

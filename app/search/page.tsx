@@ -2,6 +2,7 @@ import { getSearchData } from "./actions";
 import { SearchResults } from "@/components/shared/SearchResults";
 import { getHeroes } from "@/lib/actions/deadlockapi";
 import type { SearchOrgData, SearchPlayerData } from "@/components/shared/SearchResults";
+import { SearchPageQuery } from "../api/graphql/types/graphql";
 
 export default async function SearchPage() {
     const [data, allHeroes] = await Promise.all([
@@ -9,9 +10,9 @@ export default async function SearchPage() {
         getHeroes(),
     ]);
 
-    const users: any[] = data.getUsers ?? [];
-    const orgs: any[] = data.getOrganizations ?? [];
-    const scrimmages: any[] = data.getScrimmages ?? [];
+    const users: SearchPageQuery["getUsers"] = data.getUsers ?? [];
+    const orgs: SearchPageQuery["getOrganizations"] = data.getOrganizations ?? [];
+    const scrimmages: SearchPageQuery["getScrimmages"] = data.getScrimmages ?? [];
 
     // Build win rate stats per org from completed scrimmages
     const statsMap = new Map<string, { wins: number; total: number }>();
@@ -47,6 +48,7 @@ export default async function SearchPage() {
     const players: SearchPlayerData[] = users.map(user => ({
         _id: user._id,
         name: user.name,
+        stats: user.stats,
         role: user.role as string,
         online: user.online as boolean,
         heroes: ((user.heroes as number[]) ?? [])

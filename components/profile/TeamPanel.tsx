@@ -34,6 +34,8 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrayElement } from "@/lib/utils";
 import { sendNotification } from "@/lib/socket/notifications";
 import { toast } from "sonner";
+import { getStatlockerRank } from "@/lib/actions/deadlockapi";
+import { convertSteam64toSteam32 } from "@/lib/deadlock";
 
 type Tab = "online" | "organization";
 
@@ -50,7 +52,7 @@ export function TeamPanel({
 }: {
     profileUserId: string;
     isOwner: boolean;
-    org?: OrgCardOrg | null;
+    org?: NonNullable<UserProfileQuery["getUser"]>["organization"];
     orgScrims?: OrgCardScrim[];
     allUsers: UserEntry[];
 }) {
@@ -99,9 +101,10 @@ export function TeamPanel({
         setEditingName(false);
     }
 
-    function handleCreateTeam() {
+    async function handleCreateTeam() {
         if (!user) return;
-        createSocketTeam({ name: user.name, mmr: user.mmr, status: "JOINED" }, user.name + "'s Team");
+        const statlocker = await getStatlockerRank(convertSteam64toSteam32(user.steam?.id ?? ""))
+        createSocketTeam({ name: user.name, mmr: statlocker.averageMatchRankNumber, status: "JOINED" }, user.name + "'s Team");
     }
 
     function handleDisband() {
@@ -113,16 +116,17 @@ export function TeamPanel({
         socket.emit("team:fill");
     }
 
-    function handleSendInvite() {
+    async function handleSendInvite() {
         if (!selectedUser || !user) return;
         if (!!selectedUser.blockInvites) {
             toast.error(`${selectedUser.name} has their invites disabled.`);
             setSelectedUser(null)
             return;
         }
+
         socket.emit("team:invite", {
             userId: selectedUser._id,
-            mmr: selectedUser.mmr,
+            mmr: selectedUser.stats?.mmr,
             name: selectedUser.name,
             status: "INVITED",
         } as LiveMember);
@@ -243,6 +247,7 @@ export function TeamPanel({
                                         {slots.sort((a, b) => {
                                             if (!a) return 1;
                                             if (!b) return -1;
+                                            if (a.status === b.status) return 0;
                                             if (a.status === "JOINED") return -1;
                                             if (b.status === "JOINED") return 1;
                                             return 0;

@@ -203,6 +203,12 @@ const STATUS_CONFIG = {
         dot: "bg-muted",
         border: "border-l-muted",
     },
+    CANCELLED: {
+        label: "Cancelled",
+        pill: "text-muted bg-surface-2 border border-edge",
+        dot: "bg-muted",
+        border: "border-l-muted",
+    },
 } as Record<ScrimmageStatus, { label: string,pill: string,dot: string,border: string,}>;
 
 const BEST_OF_LABEL: Record<NonNullable<CalendarScrim["bestOf"]>, string> = {

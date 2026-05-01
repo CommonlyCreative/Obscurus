@@ -7,16 +7,12 @@ import 'dotenv/config'
 import SteamAuth from "node-steam-openid";
 import cors from 'cors';
 
-const HOST = process.env.HOSTNAME
+const CLIENT = process.env.NEXT_PUBLIC_PROD_URL as string
+const SERVER = process.env.NEXT_PUBLIC_SOCKET_URL as string
 const PORT = process.env.SOCKET_PORT;
-const CLIENT_PORT = process.env.PORT;
-const dev = process.env.NODE_ENV !== 'production'
-
-const url = HOST + (dev ? `:${CLIENT_PORT}` : '');
-
 const steam = new SteamAuth({
-    realm: url, // Site name displayed to users on logon
-    returnUrl: `${url}/auth/steam/authenticate`, // Your return route
+    realm: SERVER, // Site name displayed to users on logon
+    returnUrl: `${SERVER}/auth/steam/authenticate`, // Your return route
     apiKey: String(process.env.STEAM_API_KEY), // Steam API key
 });
 
@@ -24,13 +20,13 @@ const steam = new SteamAuth({
 
 const app = express();
 app.use(express.json());
-app.use(cors({ origin: url }))
+app.use(cors({ origin: CLIENT }))
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
     cors: {
-        origin: url,
+        origin: CLIENT,
         methods: ["GET", "POST"],
     },
 });

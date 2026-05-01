@@ -17,13 +17,25 @@ const CreateScrimPageQuery = graphql(`
         coreTeam {
           _id
           name
-          mmr
+          stats {
+            rank {
+                name
+                ranking
+            }
+            division
+          }
         }
         members {
           user {
             _id
             name
-            mmr
+            stats {
+              rank {
+                name
+                ranking
+              }
+              division
+            }
           }
           orgRole
           status
@@ -42,6 +54,13 @@ const CreateScrimPageQuery = graphql(`
             name
         }
         slug
+        blocks {
+            day
+            timesheets {
+                startTime
+                endTime
+            }
+        }
     }
   }
 `);
@@ -62,15 +81,10 @@ export default async function CreateScrimPage() {
     ) ?? null;
     const isManager = myMembership?.orgRole === OrgRole.Manager;
 
-    const coreTeam: OrgMember[] = org?.coreTeam.map((u) => ({
-        _id: u._id,
-        name: u.name,
-        mmr: u.mmr,
-    })) ?? [];
+    const coreTeam: OrgMember[] = org?.members.filter(m => org.coreTeam.some(c => c._id === m.user._id)) ?? [];
 
     const activeMembers: OrgMember[] = org?.members
-        .filter((m) => m.status === OrgMemberStatus.Active)
-        .map((m) => ({ _id: m.user._id, name: m.user.name, mmr: m.user.mmr })) ?? [];
+        .filter((m) => m.status === OrgMemberStatus.Active) ?? [];
 
     return (
         <main className="flex-1">

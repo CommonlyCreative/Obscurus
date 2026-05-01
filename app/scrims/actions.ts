@@ -15,8 +15,11 @@ const ScrimListPageQuery = graphql(`
         name
         members {
             _id
-            mmr
+            steam { id }
             name
+            stats {
+                mmr
+            }
         }
       }
       status

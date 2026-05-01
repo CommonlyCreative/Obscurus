@@ -16,8 +16,35 @@ type Organization {
     owner: User!                        # Always OrgRole.MANAGER
     members: [OrganizationMember!]!     # All active + invited members
     coreTeam: [User!]!                  # Up to 6 designated starting players
+    blocks: [AvailabilityBlock!]!
     createdAt: Timestamp!
     updatedAt: Timestamp!
+}
+
+type AvailabilityBlock {
+    day: Day!
+    timesheets: [Timesheet!]
+    exception: AvailabilityException
+}
+
+type AvailabilityException {
+    date: Timestamp!
+    timesheet: [Timesheet!]!
+}
+
+enum Day {
+    MONDAY
+    TUESDAY
+    WEDNESDAY
+    THURSDAY
+    FRIDAY
+    SATURDAY
+    SUNDAY
+}
+
+type Timesheet {
+    startTime: Timestamp!
+    endTime: Timestamp!
 }
 
 # Junction type between a user and an organization
@@ -53,6 +80,22 @@ input UpdateOrganizationInput {
     logo: String
 }
 
+input AvailabilityBlockInput {
+    day: Day!
+    timesheets: [TimesheetInput!]
+}
+
+input TimesheetInput {
+    startTime: Timestamp!
+    endTime: Timestamp!
+}
+
+input ExceptionInput {
+    day: Day
+    date: Timestamp!
+    timesheets: [TimesheetInput!]!
+}
+
 extend type Query {
     getUserOrgInvitations(user_id: String!): [Organization]!
     searchOrganizations(query: String!, limit: Int): [Organization!]!
@@ -80,4 +123,8 @@ extend type Mutation {
     setCoreTeam(org_id: String!, user_ids: [String!]!): Organization
     addCorePlayer(org_id: String!, user_id: String!): Organization
     removeCorePlayer(org_id: String!, user_id: String!): Organization
+    
+    updateAvailabilityBlocks(org_id: String!, blocks: [AvailabilityBlockInput!]!): Organization
+    addAvailabilityBlock(org_id: String!, block: AvailabilityBlockInput!): Organization
+    addException(org_id: String!, excpetion: ExceptionInput!): Organization
 }

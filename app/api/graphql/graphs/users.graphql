@@ -10,17 +10,28 @@ type User {
     name: String!
     verified: Boolean!          # Maps to emailVerified on the Better Auth user document
     role: Role!                 # Platform-level role
-    mmr: Int!                   # MMR value; use getRankByMMR(mmr) to get Rank + division
     heroes: [Int!]!          # Hero IDs from lib/deadlock.ts (e.g. "infernus", "yamato")
     bio: String                 # Player bio / about text
+    stats: Stats
     balance: Balance!
     steam: Steam
-    region: String              # Player region (e.g. "NA", "EU", "ASIA")
+    region: String!              # Player region (e.g. "NA", "EU", "ASIA")
     organization: Organization  # The one org this player belongs to; null if none
     scrimmages: [Scrimmage!]!   # Scrimmage history (resolved via scrimmage_ids)
     blockInvites: Boolean
     createdAt: Timestamp!
     updatedAt: Timestamp!
+}
+
+type Stats {
+    rank: Rank!
+    division: Int!
+    mmr: Int!
+}
+
+type Rank {
+    name: String!
+    ranking: Int
 }
 
 type Steam {

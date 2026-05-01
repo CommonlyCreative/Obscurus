@@ -8,7 +8,9 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
+import { ArrayElement, cn } from "@/lib/utils";
+import { SearchPageQuery } from "@/app/api/graphql/types/graphql";
+import { getRankImage } from "@/lib/actions/deadlockapi";
 
 export type SearchPlayerData = {
     _id: string;
@@ -18,6 +20,7 @@ export type SearchPlayerData = {
     heroes: Array<{ id: number; name: string; minimap_image_webp: string }>;
     orgName?: string;
     orgSlug?: string;
+    stats: ArrayElement<SearchPageQuery["getUsers"]>["stats"]
 };
 
 export type SearchOrgData = {
@@ -183,26 +186,44 @@ export function SearchResults({
                                     )}
                                 </div>
 
-                                {/* Hero icons */}
-                                {player.heroes.length > 0 && (
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {player.heroes.slice(0, 5).map((hero, i) => (
-                                            <Tooltip key={i}>
-                                                <TooltipTrigger>
-                                                    <img
-                                                        src={hero.minimap_image_webp}
-                                                        alt={hero.name}
-                                                        loading="lazy"
-                                                        className="w-6 h-6 rounded"
-                                                    />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>{hero.name}</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        ))}
-                                    </div>
-                                )}
+                                <div className="flex gap-1 items-center">
+                                    {/* Hero icons */}
+                                    {player.heroes.length > 0 && (
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {player.heroes.slice(0, 5).map((hero, i) => (
+                                                <Tooltip key={i}>
+                                                    <TooltipTrigger>
+                                                        <img
+                                                            src={hero.minimap_image_webp}
+                                                            alt={hero.name}
+                                                            loading="lazy"
+                                                            className="w-6 h-6 rounded"
+                                                        />
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>
+                                                        <p>{hero.name}</p>
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {/* {player.heroes.length > 0 && player.stats && <p>·</p>} */}
+                                    {player.stats && (
+                                        <Tooltip>
+                                            <TooltipTrigger>
+                                                <img
+                                                    src={getRankImage(player.stats.mmr)}
+                                                    alt={player.stats.rank.name}
+                                                    loading="lazy"
+                                                    className="w-12"
+                                                />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>{`${player.stats.rank.name} ${player.stats.division}`}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    )}
+                                </div>
                             </Link>
                         ))}
                     </div>

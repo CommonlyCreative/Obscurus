@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Scrim } from "./types";
 import { Button } from "@/components/shared/Button";
 import { ScrimListQuery } from "@/app/api/graphql/types/graphql";
 import { ArrayElement } from "@/lib/utils";
-import { getRankByMMR } from "@/lib/deadlock";
+import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
 
 const RANK_STYLES: Record<string, { text: string; bg: string }> = {
     Bronze: { text: "text-[#cd7f32]", bg: "bg-[#cd7f32]/10" },
@@ -20,18 +20,29 @@ export function ScrimCard({ scrim }: { scrim: ArrayElement<ScrimListQuery["getSc
     const [expanded, setExpanded] = useState(false);
     // const rankStyle = RANK_STYLES[scrim.rank.name] ?? { text: "text-dimmed", bg: "bg-surface-2" };
 
+    const [rank, setRank] = useState<ReturnType<typeof getRankByMMR> | null>(null);
+
+    useEffect(() => {
+        const accumulated = scrim.hostTeam.members.reduce((acc, stat) => {
+            return acc + (stat.stats?.mmr ?? 0)
+        }, 0)
+        const rankAvg = accumulated / scrim.hostTeam.members.filter(m => !!m.stats).length
+
+        setRank(getRankByMMR(rankAvg))
+    }, [])
+
     return (
         <div className="bg-surface border border-edge rounded-lg hover:border-primary/25 transition-colors">
             <div className="p-5">
                 <div className="flex items-start justify-between gap-3 mb-3">
                     <div className="min-w-0">
-                        <div className="font-bold text-foreground text-sm">{scrim.hostTeam.name ?? scrim.host.name +"'s Team"}</div>
+                        <div className="font-bold text-foreground text-sm">{scrim.hostTeam.name ?? scrim.host.name + "'s Team"}</div>
                         <div className="text-xs text-muted mt-0.5">{scrim.createdAt}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                        {/* <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rankStyle.text} ${rankStyle.bg}`}>
-                            {scrim.rank.name}
-                        </span> */}
+                        {rank && <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rank.rank.text} ${rank.rank.bg}`}>
+                            {rank.rank.name}
+                        </span>}
                         <span className="text-xs text-muted px-2 py-0.5 bg-surface-2 rounded-full border border-edge font-medium">
                             {scrim.region}
                         </span>
@@ -71,7 +82,6 @@ export function ScrimCard({ scrim }: { scrim: ArrayElement<ScrimListQuery["getSc
                                     {p.name.charAt(0)}
                                 </div>
                                 <span className="truncate">{p.name}</span>
-                                <span className="text-muted shrink-0">{getRankByMMR(p.mmr)?.rank.name}</span>
                             </div>
                         ))}
                     </div>
