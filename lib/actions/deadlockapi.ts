@@ -1,3 +1,4 @@
+"use server"
 import { cache } from "react"
 import { cacheLife } from "next/cache"
 import { DeadlockHero } from "../types/deadlock/heroes"

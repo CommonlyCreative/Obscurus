@@ -6,6 +6,7 @@ import { Footer } from "@/components/shared/Footer";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip"
 import Notification from "@/components/shared/Notification";
+import { Suspense } from "react";
 
 const inter = Inter({
     variable: "--font-inter",
@@ -29,7 +30,9 @@ export default function RootLayout({
         >
             <body className="min-h-full flex flex-col bg-background text-foreground">
                 <TooltipProvider>
-                    <Navbar />
+                    <Suspense>
+                        <Navbar />
+                    </Suspense>
                     <div className="flex flex-col flex-1 pt-16">
                         {children}
                     </div>

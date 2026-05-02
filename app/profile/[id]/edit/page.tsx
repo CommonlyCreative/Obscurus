@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { connection } from "next/server";
 import { auth, User } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -49,26 +48,32 @@ const EditProfilePageQuery = graphql(`
   }
 `);
 
-export default async function EditProfilePage({ params }: { params: Promise<{ id: string }> }) {
-    await connection();
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) redirect("/");
-
-    const user = session.user as User;
-    const profileId = await params.then(p => p.id);
-
-    if (user.id !== profileId) redirect(`/profile/${profileId}`);
+export default function EditProfilePage({ params }: { params: Promise<{ id: string }> }) {
+    const headersPromise = headers();
 
     return (
         <main className="flex-1">
             <Suspense fallback={<EditProfileSkeleton />}>
-                <EditProfileData profileId={profileId} userId={user.id} />
+                <EditProfileData headersPromise={headersPromise} paramsPromise={params} />
             </Suspense>
         </main>
     );
 }
 
-async function EditProfileData({ profileId, userId }: { profileId: string; userId: string }) {
+async function EditProfileData({
+    headersPromise,
+    paramsPromise,
+}: {
+    headersPromise: ReturnType<typeof headers>;
+    paramsPromise: Promise<{ id: string }>;
+}) {
+    const [h, { id: profileId }] = await Promise.all([headersPromise, paramsPromise]);
+    const session = await auth.api.getSession({ headers: h });
+    if (!session) redirect("/");
+
+    const user = session.user as User;
+    if (user.id !== profileId) redirect(`/profile/${profileId}`);
+
     const [{ getUser: profile, getUsers: allUsers }, heroes] = await Promise.all([
         grafbase.request(EditProfilePageQuery, { user_id: profileId }),
         getHeroes(),
@@ -79,7 +84,7 @@ async function EditProfileData({ profileId, userId }: { profileId: string; userI
     const org = profile.organization ?? null;
 
     const myMembership = org?.members.find(
-        (m) => m.user._id === userId && m.status === OrgMemberStatus.Active
+        (m) => m.user._id === user.id && m.status === OrgMemberStatus.Active
     ) ?? null;
     const isManager = myMembership?.orgRole === OrgRole.Manager;
 
@@ -90,18 +95,18 @@ async function EditProfileData({ profileId, userId }: { profileId: string; userI
     const coreTeamIds: string[] = org?.coreTeam.map((u) => u._id) ?? [];
     const steam = profile.steam ?? null;
 
-    const users = allUsers.reduce((acc, user) => {
-        if (org?.members.some(u => u.user._id === user._id)) return acc;
-        let index = acc.findIndex(u => (!user.organization && u.organization === "No organization") || (user.organization && u.organization !== "No organization" && u.organization._id === user.organization._id));
+    const users = allUsers.reduce((acc, u) => {
+        if (org?.members.some(m => m.user._id === u._id)) return acc;
+        let index = acc.findIndex(x => (!u.organization && x.organization === "No organization") || (u.organization && x.organization !== "No organization" && x.organization._id === u.organization._id));
 
         if (index === -1) {
             index = acc.length;
-            acc.push({ organization: user.organization ?? "No organization", items: [] });
+            acc.push({ organization: u.organization ?? "No organization", items: [] });
         }
 
         const element = acc.at(index);
         if (element) {
-            element.items.push(user);
+            element.items.push(u);
             acc[index] = { organization: element.organization, items: element.items };
         }
 

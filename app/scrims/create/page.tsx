@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { connection } from "next/server";
 import { auth, User } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -67,11 +66,8 @@ const CreateScrimPageQuery = graphql(`
   }
 `);
 
-export default async function CreateScrimPage() {
-    await connection();
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) redirect("/");
-    const user = session.user as User;
+export default function CreateScrimPage() {
+    const headersPromise = headers();
 
     return (
         <main className="flex-1">
@@ -83,22 +79,27 @@ export default async function CreateScrimPage() {
                     </p>
                 </div>
                 <Suspense fallback={<CreateScrimSkeleton />}>
-                    <CreateScrimData userId={user.id} />
+                    <CreateScrimData headersPromise={headersPromise} />
                 </Suspense>
             </div>
         </main>
     );
 }
 
-async function CreateScrimData({ userId }: { userId: string }) {
+async function CreateScrimData({ headersPromise }: { headersPromise: ReturnType<typeof headers> }) {
+    const h = await headersPromise;
+    const session = await auth.api.getSession({ headers: h });
+    if (!session) redirect("/");
+    const user = session.user as User;
+
     const { getUser: userData, getOrganizations: orgs } = await grafbase.request(CreateScrimPageQuery, {
-        user_id: userId,
+        user_id: user.id,
     });
 
     const org = userData?.organization ?? null;
 
     const myMembership = org?.members.find(
-        (m) => m.user._id === userId && m.status === OrgMemberStatus.Active
+        (m) => m.user._id === user.id && m.status === OrgMemberStatus.Active
     ) ?? null;
     const isManager = myMembership?.orgRole === OrgRole.Manager;
 
@@ -107,7 +108,7 @@ async function CreateScrimData({ userId }: { userId: string }) {
 
     return (
         <CreateScrimForm
-            userId={userId}
+            userId={user.id}
             orgs={orgs}
             org={org ? { _id: org._id, name: org.name, coreTeam, members: activeMembers } : null}
             isManager={isManager}

@@ -12,8 +12,8 @@ import { graphql } from "../../api/graphql/types";
 import { redirect } from "next/navigation";
 import { grafbase } from "@/lib/database/grafbase";
 import { headers } from "next/headers";
-import { getHeroes } from "@/lib/actions/deadlockapi";
 import { ScrimmageStatus } from "@/app/api/graphql/types/graphql";
+import { getHeroes } from "@/app/scrims/[id]/cache";
 
 const UserProfileRoute = graphql(`
   query UserProfile($user_id: String!) {

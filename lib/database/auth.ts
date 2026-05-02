@@ -2,7 +2,6 @@ import { betterAuth, BetterAuthOptions } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { admin, customSession } from "better-auth/plugins";
 import { Role } from "@/app/api/graphql/server";
-import { nextCookies } from "better-auth/next-js";
 import { client, db } from "./mongo";
 
 const options = {
@@ -108,7 +107,8 @@ export const auth = betterAuth({
         customSession(async ({ user, session }) => {
             return { user, session };
         }, options),
-        nextCookies()
+        // nextCookies() disabled: incompatible with cacheComponents — dynamic import of next/headers
+        // bypasses Next.js static analysis for Suspense boundary tracking
     ],
 });
 

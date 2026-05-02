@@ -1,16 +1,12 @@
 import { Suspense } from "react";
-import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth, User } from "@/lib/database/auth";
 import { OrgRequestForm } from "@/components/org/OrgRequestForm";
 import { getMyOrgRequestAction } from "./actions";
 
-export default async function OrgRequestPage() {
-    await connection();
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session) redirect("/");
-    const user = session.user as User;
+export default function OrgRequestPage() {
+    const headersPromise = headers();
 
     return (
         <main className="flex-1">
@@ -30,16 +26,21 @@ export default async function OrgRequestPage() {
             </div>
             <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <Suspense fallback={<OrgRequestSkeleton />}>
-                    <OrgRequestData userId={user.id} />
+                    <OrgRequestData headersPromise={headersPromise} />
                 </Suspense>
             </div>
         </main>
     );
 }
 
-async function OrgRequestData({ userId }: { userId: string }) {
-    const existingRequest = await getMyOrgRequestAction(userId);
-    return <OrgRequestForm userId={userId} existingRequest={existingRequest} />;
+async function OrgRequestData({ headersPromise }: { headersPromise: ReturnType<typeof headers> }) {
+    const h = await headersPromise;
+    const session = await auth.api.getSession({ headers: h });
+    if (!session) redirect("/");
+    const user = session.user as User;
+
+    const existingRequest = await getMyOrgRequestAction(user.id);
+    return <OrgRequestForm userId={user.id} existingRequest={existingRequest} />;
 }
 
 function OrgRequestSkeleton() {

@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import type { DeadlockMatch } from "@/lib/types/deadlock/match";
 import { ChevronLeft, Swords, Target, Heart } from "lucide-react";
-import { EnrichedPlayer, getMatch, getMatchPlayersData } from "@/app/scrims/[id]/actions";
+import { getMatch } from "@/app/scrims/[id]/actions";
 import { cn } from "@/lib/utils";
 import { GiCrown } from "react-icons/gi";
 import { PiCrownSimpleDuotone } from "react-icons/pi";
 import { MatchResult } from "@/app/api/graphql/types/graphql";
 import { useRouter } from "next/navigation";
+import { EnrichedPlayer, getMatchPlayersData } from "@/app/scrims/[id]/cache";
 
 type TeamDisplay = {
     name: "Hidden King" | "Arch Mother"
