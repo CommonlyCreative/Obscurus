@@ -80,12 +80,18 @@ type Team {
 type ScrimmageInvitation {
     _id: ID!
     scrimmage: Scrimmage!
+    type: InvitationType!
     user: User!
     side: MatchSide!                # Which team this invitation is for
     status: InvitationStatus!
     substitute: User                # Manager-assigned replacement if this player declines
     respondedAt: Timestamp
     createdAt: Timestamp!
+}
+
+enum InvitationType {
+    LEADER_INVITE
+    PLAYER_INVITE
 }
 
 # "Looking for Substitute" posting for a scheduled scrimmage.
@@ -183,6 +189,7 @@ input CreateScrimmageInput {
 input ScrimmageInvitationInput {
     user_id: String!
     side: MatchSide!
+    type: InvitationType!
 }
 
 input UpdateScrimmageInput {

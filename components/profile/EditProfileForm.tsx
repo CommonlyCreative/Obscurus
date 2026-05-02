@@ -46,7 +46,7 @@ import {
 } from "@/components/ui/dialog"
 import { InputGroupAddon } from "../ui/input-group";
 import { UserRoundPlus } from "lucide-react";
-import { getRankImage } from "@/lib/actions/deadlockapi";
+import { getRankImage } from "@/lib/rankImage";
 import Link from "next/link";
 
 const ALL_HEROES = Object.values(Hero);

@@ -34,7 +34,7 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrayElement } from "@/lib/utils";
 import { sendNotification } from "@/lib/socket/notifications";
 import { toast } from "sonner";
-import { getStatlockerRank } from "@/lib/actions/deadlockapi";
+import { getStatlockerRankAction } from "@/app/profile/[id]/actions";
 import { convertSteam64toSteam32 } from "@/lib/deadlock";
 
 type Tab = "online" | "organization";
@@ -103,7 +103,7 @@ export function TeamPanel({
 
     async function handleCreateTeam() {
         if (!user) return;
-        const statlocker = await getStatlockerRank(convertSteam64toSteam32(user.steam?.id ?? ""))
+        const statlocker = await getStatlockerRankAction(convertSteam64toSteam32(user.steam?.id ?? ""))
         createSocketTeam({ name: user.name, mmr: statlocker.averageMatchRankNumber, status: "JOINED" }, user.name + "'s Team");
     }
 

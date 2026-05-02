@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ArrayElement, cn } from "@/lib/utils";
 import { SearchPageQuery } from "@/app/api/graphql/types/graphql";
-import { getRankImage } from "@/lib/actions/deadlockapi";
+import { getRankImage } from "@/lib/rankImage";
 
 export type SearchPlayerData = {
     _id: string;

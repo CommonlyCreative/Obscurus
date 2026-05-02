@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth, User } from "@/lib/database/auth";
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
@@ -59,7 +60,17 @@ const OrgScrimsQuery = graphql(`
   }
 `);
 
-export default async function OrgPage({ params }: { params: Promise<{ slug: string }> }) {
+export default function OrgPage({ params }: { params: Promise<{ slug: string }> }) {
+    return (
+        <main className="flex-1">
+            <Suspense fallback={<OrgSkeleton />}>
+                <OrgContent params={params} />
+            </Suspense>
+        </main>
+    );
+}
+
+async function OrgContent({ params }: { params: Promise<{ slug: string }> }) {
     const session = await auth.api.getSession({ headers: await headers() });
     const user = session?.user as User | undefined;
     const { slug } = await params;
@@ -80,7 +91,7 @@ export default async function OrgPage({ params }: { params: Promise<{ slug: stri
     const activeMemberCount = org.members.filter(m => m.status === OrgMemberStatus.Active).length;
 
     return (
-        <main className="flex-1">
+        <>
             <OrgHeader org={org} isManager={isManager} activeMemberCount={activeMemberCount} />
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {isInvited && user && (
@@ -118,6 +129,35 @@ export default async function OrgPage({ params }: { params: Promise<{ slug: stri
                     </div>
                 </div>
             </div>
-        </main>
+        </>
+    );
+}
+
+function OrgSkeleton() {
+    return (
+        <div className="animate-pulse">
+            <div className="border-b border-edge bg-surface">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-3">
+                    <div className="h-8 w-56 bg-surface-2 rounded-lg" />
+                    <div className="h-4 w-40 bg-surface-2 rounded-lg" />
+                    <div className="flex gap-2 pt-1">
+                        <div className="h-6 w-20 bg-surface-2 rounded-full" />
+                        <div className="h-6 w-24 bg-surface-2 rounded-full" />
+                    </div>
+                </div>
+            </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="h-20 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="h-20 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="h-20 bg-surface-2 rounded-xl border border-edge" />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+                    <div className="lg:col-span-2 h-80 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="lg:col-span-3 h-80 bg-surface-2 rounded-xl border border-edge" />
+                </div>
+                <div className="h-64 bg-surface-2 rounded-xl border border-edge" />
+            </div>
+        </div>
     );
 }

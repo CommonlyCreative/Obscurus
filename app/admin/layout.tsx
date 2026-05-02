@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/database/auth";
 import { Role } from "@/app/api/graphql/server";
@@ -7,6 +8,7 @@ import { AdminSidebar } from "@/components/admin/AdminSidebar";
 const ADMIN_ROLES: string[] = [Role.Admin, Role.Moderator, Role.Support];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+    await connection();
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) redirect("/");
 

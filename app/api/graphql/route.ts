@@ -87,5 +87,3 @@ export async function POST(request: Request) {
     //     return NextResponse.json({ error: "Not authorized." }, { status: 401 })
     return handler(request)
 }
-
-export const revalidate = 0;

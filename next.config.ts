@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
         ]
     },
     // serverExternalPackages: ['@deadlock-api/ui-core', '@deadlock-api/ui-react'],
-    transpilePackages: ['@deadlock-api/ui-core', '@deadlock-api/ui-react']
+    transpilePackages: ['@deadlock-api/ui-core', '@deadlock-api/ui-react'],
+    cacheComponents: true,
 };
 
 export default nextConfig;

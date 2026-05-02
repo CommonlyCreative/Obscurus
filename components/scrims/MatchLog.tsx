@@ -9,10 +9,10 @@ import {
     submitMatchResultAction,
     setPartyCodeAction,
     cancelMatchAction,
+    getMatch,
 } from "@/app/scrims/[id]/actions";
 import MatchData from "./MatchData";
 import { toast } from "sonner";
-import { getMatch } from "@/lib/actions/deadlockapi";
 
 interface Match {
     number: number;
@@ -142,7 +142,7 @@ export function MatchLog({
         submitTransition(async () => {
             try {
                 let result = MatchResult.Draw;
-                const metadata = await getMatch(matchId, Date.now());
+                const metadata = await getMatch(matchId);
                 if (metadata && typeof metadata.match_info.winning_team === "number") {
                     const wt = metadata.match_info.winning_team;
                     result =

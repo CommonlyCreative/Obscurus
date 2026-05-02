@@ -2,13 +2,15 @@
 
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
-import { GetScrimmageDetailQuery, InvitationStatus, MatchResult, MatchSide } from "@/app/api/graphql/types/graphql";
-import { cache } from "react";
-import { steam } from "@/lib/steam";
+import { GetMatchUserBySteamIdQuery, GetScrimmageDetailQuery, InvitationStatus, MatchResult, MatchSide } from "@/app/api/graphql/types/graphql";
+import { cacheLife, cacheTag } from "next/cache";
+import { SteamPlayer, SteamPlayerSummaryResponse } from "@/lib/types/steam/profile";
 import { LiveTeam } from "@/lib/socket/teams";
-import { APILimit } from "@/lib/actions/deadlockapi";
+import { APILimit, getHeroes, getItem } from "@/lib/actions/deadlockapi";
 import { db } from "@/lib/database/mongo";
 import { ArrayElement } from "@/lib/utils";
+import { MatchPlayer, DeadlockMatch } from "@/lib/types/deadlock/match";
+import { convertSteam32toSteam64 } from "@/lib/deadlock";
 
 const ReadyUpMutation = graphql(`
     mutation ReadyUp($scrimmage_id: String!, $side: MatchSide!) {
@@ -254,10 +256,13 @@ export async function getMatchUserBySteamId(steam_id: string) {
     return getUserBySteamId;
 }
 
-export const getSteamUser = cache(async function (steamId: string) {
-    const id = await steam.resolve(steamId)
-    return JSON.parse(JSON.stringify(await steam.getUserSummary(id)));
-})
+export async function getSteamUsers(steamIds: string[]): Promise<SteamPlayer[]> {
+    "use cache";
+    cacheLife("hours");
+    const res = await fetch(`https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${process.env.NEXT_PUBLIC_STEAM_API_KEY}&steamids=${encodeURIComponent(steamIds.join(','))}`);
+    const body = await res.json() as SteamPlayerSummaryResponse;
+    return body.response.players;
+}
 
 const collection = db.collection<APILimit>("deadlock-api-limits");
 
@@ -272,4 +277,66 @@ export async function deleteLimit(match_id: string) {
 export async function updateLimit({ match_id, limit, remaining, reset_in, last_request, past_request }: APILimit) {
     const update = await collection.updateOne({ match_id }, { $set: { match_id, limit, remaining, reset_in, last_request, past_request } }, { upsert: true })
     return update.modifiedCount > 0;
+}
+
+export async function getMatch(match_id: string): Promise<DeadlockMatch> {
+    await deleteLimit(match_id);
+    const res = await fetch(`https://api.deadlock-api.com/v1/matches/${match_id}/metadata`, {
+        next: { revalidate: 3600 },
+    });
+    const body = await res.json();
+    if (body.error) {
+        if (!body.error.quota) return { errorMessage: `An unknown error occurred when retrieving match ${match_id}: ${JSON.stringify(body.error)}` } as any;
+        const { quota: { limit }, remaining } = body.error as { quota: { limit: number; period: number }; remaining: number; request: number };
+        const last_request = Date.now();
+        const past_request = ([] as number[]).filter(r => r < last_request - 60 * 60 * 1000);
+        const reset_in = ((past_request.at(0) ?? last_request) + 60 * 60 * 1000) - last_request;
+        await updateLimit({ match_id, limit, remaining, reset_in, last_request, past_request });
+    }
+    return body;
+}
+
+export type EnrichedPlayer = SteamPlayer
+    & Omit<MatchPlayer, "hero_id" | "items">
+    & { hero: { id: number; name: string; images: { minimap_image: string; icon_hero_card: string } } }
+    & { items: { id: string; name: string; shop_image: string; hero?: number; item_tier: number }[] }
+    & Partial<NonNullable<GetMatchUserBySteamIdQuery["getUserBySteamId"]>>;
+
+export async function getMatchPlayersData(match_id: string, players: MatchPlayer[]): Promise<EnrichedPlayer[]> {
+    "use cache";
+    cacheLife("hours");
+    cacheTag(`match-players-${match_id}`);
+
+    const steamIds = players.map(p => convertSteam32toSteam64(p.account_id));
+
+    const uniqueItemIds = [...new Set(
+        players.flatMap(p => p.items.filter(i => i.sold_time_s === 0).map(i => i.item_id))
+    )];
+
+    const [steamPlayers, allHeroes, allItems, dbUsers] = await Promise.all([
+        getSteamUsers(steamIds),
+        getHeroes(),
+        Promise.all(uniqueItemIds.map(id => getItem(id))),
+        Promise.all(steamIds.map(id => getMatchUserBySteamId(id))),
+    ]);
+
+    const steamMap = new Map(steamPlayers.map(p => [p.steamid, p]));
+    const heroMap = new Map(allHeroes.map(h => [h.id, h]));
+    const itemMap = new Map(allItems.map(i => [String(i.id), i]));
+    const userMap = new Map(dbUsers.map((u, idx) => [steamIds[idx], u]));
+
+    return players.map(player => {
+        const steamId = convertSteam32toSteam64(player.account_id);
+        const { hero_id, items, ...rest } = player;
+        return {
+            ...rest,
+            ...(steamMap.get(steamId) ?? {}),
+            ...(userMap.get(steamId) ?? {}),
+            hero: heroMap.get(hero_id),
+            items: items
+                .filter(i => i.sold_time_s === 0)
+                .map(i => itemMap.get(String(i.item_id)))
+                .filter(Boolean),
+        } as EnrichedPlayer;
+    });
 }

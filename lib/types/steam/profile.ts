@@ -1,21 +1,24 @@
-export interface SteamAvatar {
-    small: string;
-    medium: string;
-    large: string;
-    hash: string;
+export interface SteamPlayer {
+    steamid: string;
+    communityvisibilitystate: number;
+    profilestate: number;
+    personaname: string;
+    commentpermission: number;
+    profileurl: string;
+    avatar: string;
+    avatarmedium: string;
+    avatarfull: string;
+    avatarhash: string;
+    lastlogoff: number;
+    personastate: number;
+    realname?: string;
+    primaryclanid: string;
+    timecreated: number;
+    personastateflags: number;
 }
 
-export interface SteamUserSummary {
-    steamID: string;
-    avatar: SteamAvatar;
-    url: string;
-    visible: boolean;
-    personaState: number;
-    personaStateFlags: number;
-    allowsComments: boolean;
-    nickname: string;
-    lastLogOffTimestamp: number;
-    createdTimestamp: number;
-    realName: string | null;
-    primaryGroupID: string;
+export interface SteamPlayerSummaryResponse {
+    response: {
+        players: SteamPlayer[];
+    };
 }

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth, User } from "@/lib/database/auth";
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
@@ -74,7 +75,17 @@ const GetScrimmageQuery = graphql(`
     }
 `);
 
-export default async function ScrimPage({ params }: { params: Promise<{ id: string }> }) {
+export default function ScrimPage({ params }: { params: Promise<{ id: string }> }) {
+    return (
+        <main className="flex-1">
+            <Suspense fallback={<ScrimDetailSkeleton />}>
+                <ScrimContent params={params} />
+            </Suspense>
+        </main>
+    );
+}
+
+async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const session = await auth.api.getSession({ headers: await headers() });
     const user = session?.user as User | undefined;
@@ -86,20 +97,16 @@ export default async function ScrimPage({ params }: { params: Promise<{ id: stri
 
     if (!scrim) notFound();
 
-    const steamIds = scrim.opponentOrg?.members.map(member => convertSteam64toSteam32(member.user.steam?.id ?? "")) ?? []
-
-    const stats = await getStatlockerRanks(steamIds)
+    const steamIds = scrim.opponentOrg?.members.map(member => convertSteam64toSteam32(member.user.steam?.id ?? "")) ?? [];
+    const stats = await getStatlockerRanks(steamIds);
 
     const opponentOrg = scrim.opponentOrg;
-
     if (opponentOrg) {
         opponentOrg.members = opponentOrg.members
             .map(member => ({
                 ...member,
                 mmr: stats.find(stat => stat.accountId.toString() === convertSteam64toSteam32(member.user.steam?.id ?? ""))?.estimatedRankNumber ?? 0
-            } as ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & {
-                        mmr: number
-                    }))
+            } as ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & { mmr: number }));
     }
 
     const viewerOrgId = viewerData?.getUser?.organization?._id ?? null;
@@ -110,24 +117,41 @@ export default async function ScrimPage({ params }: { params: Promise<{ id: stri
     const isOpponentMember = user ? opponentMemberIds.includes(user.id) : false;
     const isHostLeader = user?.id === scrim.hostTeam?.leader._id;
     const isOpponentLeader = user?.id === scrim.opponentTeam?.leader._id;
-    const isOpponentOrgManager = scrim.opponentOrg?.members.some(member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active) ?? false;
+    const isOpponentOrgManager = scrim.opponentOrg?.members.some(
+        member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
+    ) ?? false;
 
     return (
-        <main className="flex-1">
+        <ScrimDetail
+            scrim={scrim}
+            userId={user?.id}
+            isHost={isHost}
+            isHostLeader={isHostLeader}
+            isOpponentLeader={isOpponentLeader}
+            isHostMember={isHostMember}
+            isOpponentMember={isOpponentMember}
+            hostOrgId={scrim.hostOrg?._id ?? null}
+            opponentOrg={opponentOrg as ScrimDetailProps["opponentOrg"] ?? null}
+            isOpponentOrgManager={isOpponentOrgManager}
+            viewerOrgId={viewerOrgId}
+        />
+    );
+}
 
-            <ScrimDetail
-                scrim={scrim}
-                userId={user?.id}
-                isHost={isHost}
-                isHostLeader={isHostLeader}
-                isOpponentLeader={isOpponentLeader}
-                isHostMember={isHostMember}
-                isOpponentMember={isOpponentMember}
-                hostOrgId={scrim.hostOrg?._id ?? null}
-                opponentOrg={opponentOrg as ScrimDetailProps["opponentOrg"] ?? null}
-                isOpponentOrgManager={isOpponentOrgManager}
-                viewerOrgId={viewerOrgId}
-            />
-        </main>
+function ScrimDetailSkeleton() {
+    return (
+        <div className="animate-pulse max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+            <div className="h-10 bg-surface-2 rounded-lg w-72" />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                    <div className="h-56 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="h-40 bg-surface-2 rounded-xl border border-edge" />
+                </div>
+                <div className="space-y-4">
+                    <div className="h-56 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="h-32 bg-surface-2 rounded-xl border border-edge" />
+                </div>
+            </div>
+        </div>
     );
 }

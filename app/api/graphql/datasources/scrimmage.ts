@@ -162,6 +162,7 @@ export class ScrimmageDataSource {
             invitations: clean.invitations?.map(obj => ({
                 _id: new ObjectId(),
                 status: InvitationStatus.Pending,
+                type: obj.type,
                 side: obj.side,
                 user: obj.user_id,
                 createdAt: now(),

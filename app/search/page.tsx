@@ -1,10 +1,27 @@
+import { Suspense } from "react";
 import { getSearchData } from "./actions";
 import { SearchResults } from "@/components/shared/SearchResults";
 import { getHeroes } from "@/lib/actions/deadlockapi";
 import type { SearchOrgData, SearchPlayerData } from "@/components/shared/SearchResults";
 import { SearchPageQuery } from "../api/graphql/types/graphql";
 
-export default async function SearchPage() {
+export default function SearchPage() {
+    return (
+        <main className="flex-1 flex flex-col items-center pt-24 pb-16 px-4">
+            <div className="w-full max-w-4xl">
+                <div className="mb-6">
+                    <h1 className="text-2xl font-bold text-foreground">Find Players & Organizations</h1>
+                    <p className="text-sm text-muted mt-1">Search across all Deadlock players and organizations.</p>
+                </div>
+                <Suspense fallback={<SearchSkeleton />}>
+                    <SearchContent />
+                </Suspense>
+            </div>
+        </main>
+    );
+}
+
+async function SearchContent() {
     const [data, allHeroes] = await Promise.all([
         getSearchData(),
         getHeroes(),
@@ -14,7 +31,6 @@ export default async function SearchPage() {
     const orgs: SearchPageQuery["getOrganizations"] = data.getOrganizations ?? [];
     const scrimmages: SearchPageQuery["getScrimmages"] = data.getScrimmages ?? [];
 
-    // Build win rate stats per org from completed scrimmages
     const statsMap = new Map<string, { wins: number; total: number }>();
     for (const scrim of scrimmages) {
         const { result, hostOrg, opponentOrg } = scrim;
@@ -58,15 +74,40 @@ export default async function SearchPage() {
         orgSlug: user.organization?.slug ?? undefined,
     }));
 
+    return <SearchResults players={players} organizations={organizations} />;
+}
+
+function SearchSkeleton() {
     return (
-        <main className="flex-1 flex flex-col items-center pt-24 pb-16 px-4">
-            <div className="w-full max-w-4xl">
-                <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-foreground">Find Players & Organizations</h1>
-                    <p className="text-sm text-muted mt-1">Search across all Deadlock players and organizations.</p>
-                </div>
-                <SearchResults players={players} organizations={organizations} />
+        <div className="w-full bg-surface border border-edge rounded-lg overflow-hidden">
+            <div className="p-4 border-b border-edge">
+                <div className="h-9 bg-surface-2 rounded-md" />
             </div>
-        </main>
+            <div className="px-4 py-2.5 bg-surface-2 border-b border-edge h-10" />
+            {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="px-4 py-3 border-b border-edge flex items-center gap-3 animate-pulse">
+                    <div className="w-9 h-9 rounded-md bg-surface-2 shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                        <div className="h-4 bg-surface-2 rounded w-1/3" />
+                        <div className="h-3 bg-surface-2 rounded w-1/4" />
+                    </div>
+                </div>
+            ))}
+            <div className="px-4 py-2.5 bg-surface-2 border-b border-edge h-10" />
+            {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-4 py-3 border-b border-edge flex items-center gap-3 animate-pulse">
+                    <div className="w-9 h-9 rounded-full bg-surface-2 shrink-0" />
+                    <div className="space-y-1.5 flex-1">
+                        <div className="h-4 bg-surface-2 rounded w-1/4" />
+                        <div className="h-3 bg-surface-2 rounded w-1/5" />
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                            <div key={j} className="w-6 h-6 rounded bg-surface-2" />
+                        ))}
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 }

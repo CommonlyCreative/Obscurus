@@ -1,7 +1,4 @@
 import { StatCard } from "./StatCard";
-import { User } from "@/lib/database/auth";
-import { graphql, useFragment } from "@/app/api/graphql/types";
-import { asyncMap } from "@/lib/utils";
 import { ScrimmageResult, UserProfileQuery } from "@/app/api/graphql/types/graphql";
 
 export function ProfileStats({ _id, scrimmages }: { _id: string; scrimmages: NonNullable<UserProfileQuery["getUser"]>["scrimmages"] }) {

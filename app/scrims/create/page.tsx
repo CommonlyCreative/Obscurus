@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { connection } from "next/server";
 import { auth, User } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -66,25 +68,10 @@ const CreateScrimPageQuery = graphql(`
 `);
 
 export default async function CreateScrimPage() {
+    await connection();
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session) redirect("/");
-
     const user = session.user as User;
-    const { getUser: userData, getOrganizations: orgs } = await grafbase.request(CreateScrimPageQuery, {
-        user_id: user.id,
-    });
-
-    const org = userData?.organization ?? null;
-
-    const myMembership = org?.members.find(
-        (m) => m.user._id === user.id && m.status === OrgMemberStatus.Active
-    ) ?? null;
-    const isManager = myMembership?.orgRole === OrgRole.Manager;
-
-    const coreTeam: OrgMember[] = org?.members.filter(m => org.coreTeam.some(c => c._id === m.user._id)) ?? [];
-
-    const activeMembers: OrgMember[] = org?.members
-        .filter((m) => m.status === OrgMemberStatus.Active) ?? [];
 
     return (
         <main className="flex-1">
@@ -95,13 +82,46 @@ export default async function CreateScrimPage() {
                         Post a match request for other teams to accept.
                     </p>
                 </div>
-                <CreateScrimForm
-                    userId={user.id}
-                    orgs={orgs}
-                    org={org ? { _id: org._id, name: org.name, coreTeam, members: activeMembers } : null}
-                    isManager={isManager}
-                />
+                <Suspense fallback={<CreateScrimSkeleton />}>
+                    <CreateScrimData userId={user.id} />
+                </Suspense>
             </div>
         </main>
+    );
+}
+
+async function CreateScrimData({ userId }: { userId: string }) {
+    const { getUser: userData, getOrganizations: orgs } = await grafbase.request(CreateScrimPageQuery, {
+        user_id: userId,
+    });
+
+    const org = userData?.organization ?? null;
+
+    const myMembership = org?.members.find(
+        (m) => m.user._id === userId && m.status === OrgMemberStatus.Active
+    ) ?? null;
+    const isManager = myMembership?.orgRole === OrgRole.Manager;
+
+    const coreTeam: OrgMember[] = org?.members.filter(m => org.coreTeam.some(c => c._id === m.user._id)) ?? [];
+    const activeMembers: OrgMember[] = org?.members.filter((m) => m.status === OrgMemberStatus.Active) ?? [];
+
+    return (
+        <CreateScrimForm
+            userId={userId}
+            orgs={orgs}
+            org={org ? { _id: org._id, name: org.name, coreTeam, members: activeMembers } : null}
+            isManager={isManager}
+        />
+    );
+}
+
+function CreateScrimSkeleton() {
+    return (
+        <div className="animate-pulse space-y-6">
+            <div className="h-44 bg-surface-2 rounded-xl border border-edge" />
+            <div className="h-44 bg-surface-2 rounded-xl border border-edge" />
+            <div className="h-36 bg-surface-2 rounded-xl border border-edge" />
+            <div className="h-10 w-36 bg-surface-2 rounded-lg" />
+        </div>
     );
 }

@@ -7,6 +7,7 @@ import { SendNotificationM } from "@/lib/shared-graphs";
 import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { getStatlockerRank } from "@/lib/actions/deadlockapi";
 
 const AcceptOrgInviteMutation = graphql(`
   mutation ProfileAcceptOrgInvite($org_id: String!, $user_id: String!) {
@@ -95,7 +96,7 @@ export async function notifyScrimmageInvitation(user_id: string, teamName: strin
     const result = await grafbase.request(SendNotificationM, {
         input: {
             recipient: user_id,
-            type: NotificationType.General,
+            type: NotificationType.Invitation,
             title: "You have a scrimmage invitation",
             description: `${teamName} challenged you to a scrimmage.`,
             senderName: responderName,
@@ -116,4 +117,8 @@ const GetAllTeamUsers = graphql(`
 
 export async function getAllTeamUsers() {
     return await grafbase.request(GetAllTeamUsers);
+}
+
+export async function getStatlockerRankAction(steam_id: string) {
+    return getStatlockerRank(steam_id);
 }

@@ -13,7 +13,7 @@ const PORT = process.env.SOCKET_PORT;
 const steam = new SteamAuth({
     realm: SERVER, // Site name displayed to users on logon
     returnUrl: `${SERVER}/auth/steam/authenticate`, // Your return route
-    apiKey: String(process.env.STEAM_API_KEY), // Steam API key
+    apiKey: String(process.env.NEXT_PUBLIC_STEAM_API_KEY), // Steam API key
 });
 
 

@@ -2,7 +2,7 @@
 
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
-import { BestOf, MatchSide } from "@/app/api/graphql/types/graphql";
+import { BestOf, InvitationType, MatchSide } from "@/app/api/graphql/types/graphql";
 import { checkForOverlap, getGoogleClient } from "@/lib/google";
 import { google } from "googleapis";
 import { db } from "@/lib/database/mongo";
@@ -63,7 +63,7 @@ export async function createScrimmageAction(payload: CreateScrimPayload) {
             wagerAmount: payload.wagerAmount,
             bestOf: payload.bestOf,
             opponentOrg_id: payload.opponentOrg_id,
-            invitations: payload.targetLeaderId ? [{ user_id: payload.targetLeaderId, side: MatchSide.Opponent }] : [],
+            invitations: payload.targetLeaderId ? [{ user_id: payload.targetLeaderId, side: MatchSide.Opponent, type: InvitationType.LeaderInvite }] : [],
         },
     });
 

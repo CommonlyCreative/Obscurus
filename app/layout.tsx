@@ -4,8 +4,6 @@ import { Inter } from "next/font/google";
 import { Navbar } from "@/components/shared/Navbar";
 import { Footer } from "@/components/shared/Footer";
 import { Toaster } from "@/components/ui/sonner";
-import { auth } from "@/lib/database/auth";
-import { headers } from "next/headers";
 import { TooltipProvider } from "@/components/ui/tooltip"
 import Notification from "@/components/shared/Notification";
 
@@ -19,13 +17,11 @@ export const metadata: Metadata = {
     description: "Organize competitive Deadlock scrimmages. Build your team, post matches, and compete.",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
     children,
 }: Readonly<{
     children: React.ReactNode;
 }>) {
-    const session = await auth.api.getSession({ headers: await headers() });
-
     return (
         <html
             lang="en"

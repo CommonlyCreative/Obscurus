@@ -49,11 +49,8 @@ export const resolvers: Resolvers = {
         scrimmages: async (parent, _, { dataSources: { scrimmages } }) => {
             const user = parent as any as DBUser;
             try {
-                return await asyncMap(user.scrimmages, async (scrimmage_id) => {
-                        const s = await scrimmages.getGraphQLScrimmage(scrimmage_id);
-                        if (!s) throw new Error(`Scrimmage ${scrimmage_id} not found`);
-                        return { newObj: s };
-                    });
+                
+                return (await Promise.all(user.scrimmages.map(scrimmage_id => scrimmages.getGraphQLScrimmage(scrimmage_id)))).filter((x): x is WithId<Scrimmage> => !!x)
             } catch (error) {
                 throw new Error(`Failed to fetch scrimmages for user ${user._id}: ${error}`);
             }

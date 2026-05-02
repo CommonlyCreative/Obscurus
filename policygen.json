@@ -1,0 +1,73 @@
+{
+  "$schema": "https://policygen.xyz/schemas/0.6/schema.json",
+  "output": {
+    "privacyFilePath": "./app/privacy/page.html",
+    "termsFilePath": "./app/terms/page.html",
+    "fileType": "html",
+    "cssFramework": "tailwind",
+    "locales": [
+      "en"
+    ]
+  },
+  "entity": {
+    "name": "Obscurus",
+    "website": "https://obscurus.us",
+    "address": ""
+  },
+  "privacy": {
+    "privacyEmail": "",
+    "platforms": [
+      "web"
+    ],
+    "locations": [],
+    "socialSignIn": false,
+    "personalInformation": [],
+    "sensitiveInformation": [],
+    "thirdPartyData": [],
+    "paymentData": false,
+    "paymentProcessors": [],
+    "appUsageData": false,
+    "thirdPartyDisclosure": false,
+    "thirdPartyDisclosureEntities": [],
+    "thirdPartySharing": false,
+    "thirdPartySharingEntities": [],
+    "securityMeasures": false,
+    "webTracking": false,
+    "thirdPartyAnalytics": false,
+    "serviceRequirements": [],
+    "legalBasis": [],
+    "usStatePrivacyLaws": false,
+    "dpo": false,
+    "cpraCompliance": false,
+    "vcdpaCompliance": false,
+    "cookieConsent": false,
+    "dataBreachNotification": false,
+    "crossBorderTransfers": false,
+    "coppaCompliance": false
+  },
+  "terms": {
+    "supportEmail": "",
+    "underEighteen": false,
+    "underThirteen": false,
+    "purchasableGoods": false,
+    "subscription": false,
+    "freeTrial": false,
+    "autoRenew": false,
+    "refundPolicy": "none",
+    "userContent": false,
+    "userContentLicense": false,
+    "userAccounts": false,
+    "governingLaw": "California",
+    "disputeResolution": "litigation",
+    "mediation": false,
+    "prohibitedUses": [],
+    "serviceSLA": false,
+    "serviceSLAAmount": 0,
+    "serviceSLARefund": false,
+    "liabilityLimitation": false,
+    "liabilityLimitationAmount": 0,
+    "forceMajeure": true,
+    "dmcaTakedown": false,
+    "taxLiability": false
+  }
+}

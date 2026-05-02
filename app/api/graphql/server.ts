@@ -191,6 +191,11 @@ export enum InvitationStatus {
   Pending = 'PENDING'
 }
 
+export enum InvitationType {
+  LeaderInvite = 'LEADER_INVITE',
+  PlayerInvite = 'PLAYER_INVITE'
+}
+
 export type LogStripeEventInput = {
   apiVersion: Scalars['String']['input'];
   eventType: Scalars['String']['input'];
@@ -934,11 +939,13 @@ export type ScrimmageInvitation = {
   side: MatchSide;
   status: InvitationStatus;
   substitute?: Maybe<User>;
+  type: InvitationType;
   user: User;
 };
 
 export type ScrimmageInvitationInput = {
   side: MatchSide;
+  type: InvitationType;
   user_id: Scalars['String']['input'];
 };
 
@@ -1360,6 +1367,7 @@ export type ResolversTypes = ResolversObject<{
   ID: ResolverTypeWrapper<Scalars['ID']['output']>;
   Int: ResolverTypeWrapper<Scalars['Int']['output']>;
   InvitationStatus: InvitationStatus;
+  InvitationType: InvitationType;
   LogStripeEventInput: LogStripeEventInput;
   Match: ResolverTypeWrapper<Match>;
   MatchResult: MatchResult;
@@ -1741,6 +1749,7 @@ export type ScrimmageInvitationResolvers<ContextType = Context, ParentType exten
   side?: Resolver<ResolversTypes['MatchSide'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['InvitationStatus'], ParentType, ContextType>;
   substitute?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType>;
+  type?: Resolver<ResolversTypes['InvitationType'], ParentType, ContextType>;
   user?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
 }>;
 

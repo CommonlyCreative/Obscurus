@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { ProfileOrgInvites } from "@/components/profile/ProfileOrgInvites";
@@ -13,23 +14,6 @@ import { grafbase } from "@/lib/database/grafbase";
 import { headers } from "next/headers";
 import { getHeroes } from "@/lib/actions/deadlockapi";
 import { ScrimmageStatus } from "@/app/api/graphql/types/graphql";
-import { convertSteam64toSteam32 } from "@/lib/deadlock";
-
-// const MOCK_PLAYER: Player = {
-//     name: "ShadowStriker",
-//     tag: "#2847",
-//     role: "Flex",
-//     rank: "Diamond II",
-//     rankColor: "text-[#b9f2ff]",
-//     rankBg: "bg-[#b9f2ff]/10",
-//     region: "NA",
-//     wins: 38,
-//     losses: 14,
-//     scrims: 52,
-//     hours: 214,
-//     bio: "Flex player focused on support/carry. Looking for serious teams for weekly scrims. Available most evenings EST.",
-// };
-
 
 const UserProfileRoute = graphql(`
   query UserProfile($user_id: String!) {
@@ -173,9 +157,19 @@ const GetOrgScrimsQuery = graphql(`
   }
 `);
 
-export default async function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default function ProfilePage({ params }: { params: Promise<{ id: string }> }) {
+    return (
+        <main className="flex-1">
+            <Suspense fallback={<ProfileSkeleton />}>
+                <ProfileContent params={params} />
+            </Suspense>
+        </main>
+    );
+}
+
+async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth.api.getSession({ headers: await headers() });
-    const user = session?.user as User;
+    const user = session?.user as User | undefined;
     const userId = await params.then(p => p.id);
 
     const [{ getUser: profile, getUsers: allUsers, getUserOrgInvitations: orgInvitations, getScrimmageInvitations: scrimInvitations }, heroes] = await Promise.all([
@@ -183,9 +177,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         getHeroes(),
     ]);
 
-    if (!profile) {
-        redirect("/");
-    }
+    if (!profile) redirect("/");
 
     const orgScrims = profile.organization
         ? (await grafbase.request(GetOrgScrimsQuery, { org_id: profile.organization._id }))
@@ -193,10 +185,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         : [];
 
     return (
-        <main className="flex-1">
+        <>
             <ProfileHeader
                 profile={profile}
-                heroes={heroes.filter(hero => user.heroes.includes(hero.id))}
+                heroes={heroes.filter(hero => (user?.heroes ?? []).includes(hero.id))}
                 editHref={user?.id === profile._id ? `/profile/${profile._id}/edit` : undefined}
             />
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -232,6 +224,32 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
                     </div>
                 </div>
             </div>
-        </main>
+        </>
+    );
+}
+
+function ProfileSkeleton() {
+    return (
+        <>
+            <div className="animate-pulse border-b border-edge bg-surface">
+                <div className="h-32 bg-surface-2" />
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex items-end gap-4 pb-6 -mt-10">
+                        <div className="w-20 h-20 rounded-full bg-surface-2 border-4 border-surface shrink-0" />
+                        <div className="space-y-2 pb-2">
+                            <div className="h-6 w-40 bg-surface-2 rounded-lg" />
+                            <div className="h-4 w-24 bg-surface-2 rounded-lg" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="animate-pulse max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+                <div className="h-24 bg-surface-2 rounded-xl border border-edge" />
+                <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
+                    <div className="lg:col-span-2 h-64 bg-surface-2 rounded-xl border border-edge" />
+                    <div className="lg:col-span-3 h-64 bg-surface-2 rounded-xl border border-edge" />
+                </div>
+            </div>
+        </>
     );
 }
