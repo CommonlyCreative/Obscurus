@@ -6,7 +6,7 @@ import { Button } from "@/components/shared/Button";
 import { RosterSelector } from "./RosterSelector";
 import { LiveTeamPicker } from "./LiveTeamPicker";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
-import { createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
+import { createGoogleScrimmageEvent, createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
 import { BestOf, CreateScrimPageQuery, MatchSide, ScrimmageInvitationInput } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
 import type { OrgMember, Region } from "./types";
@@ -54,7 +54,7 @@ function SectionCard({ title, subtitle, children }: {
     );
 }
 
-const ENDTIME_CONVERSION = {
+export const ENDTIME_CONVERSION = {
     [BestOf.One]: 1 * 60 * 60 * 1000,
     [BestOf.Three]: 2 * 60 * 60 * 1000,
     [BestOf.Five]: 4 * 60 * 60 * 1000,
@@ -118,18 +118,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     : null;
                 let opponentOrg = await getOrganization(targetLeaderId ?? undefined);
                 if (scheduledAt && opponentOrg) {
-                    const endTime = new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf])
-                    const response = await insertCalendarInfo({
-                        summary: "Scrimmage vs. " + opponentOrg.name,
-                        startTime: scheduledAt.toISOString(),
-                        endTime: endTime.toISOString(),
-                        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    })
-
-                    const body = await response?.json();
-                    if (response?.status !== 200) {
-                        throw Error(`Unknown error ${body}`)
-                    }
+                    await createGoogleScrimmageEvent(scheduledAt, opponentOrg.name, bestOf)
                 }
                 try {
                     const result = await createScrimmageAction({
@@ -147,12 +136,12 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     });
 
                     if (result) {
-                        router.push(`/scrims/${result._id}`);
                         if (targetLeaderId) {
                             const teamName = orgAffiliated && org ? org.name : liveTeam?.name ?? "Unknown Team";
                             const notification = await notifyScrimmageInvitation(targetLeaderId, teamName)
                             socket.emit("notify", notification)
                         }
+                        router.push(`/scrims/${result._id}`);
                     } else {
                         setError("Failed to create scrimmage. Please try again.");
                     }

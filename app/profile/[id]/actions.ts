@@ -6,8 +6,8 @@ import { InvitationStatus, NotificationType, SendNotificationMutation } from "@/
 import { SendNotificationM } from "@/lib/shared-graphs";
 import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
-import { revalidatePath } from "next/cache";
-import { getStatlockerRank } from "@/lib/actions/deadlockapi";
+import { cacheLife, revalidatePath } from "next/cache";
+import { getStatlockerRank, getStatlockerRanks } from "@/lib/actions/deadlockapi";
 
 const AcceptOrgInviteMutation = graphql(`
   mutation ProfileAcceptOrgInvite($org_id: String!, $user_id: String!) {
@@ -120,5 +120,13 @@ export async function getAllTeamUsers() {
 }
 
 export async function getStatlockerRankAction(steam_id: string) {
+    "use cache";
+    cacheLife("hours");
     return getStatlockerRank(steam_id);
+}
+
+export async function getStatlockerRanksAction(steam_ids: string[]) {
+    "use cache";
+    cacheLife("hours");
+    return getStatlockerRanks(steam_ids);
 }

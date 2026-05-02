@@ -4,11 +4,12 @@ import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
 import { BestOf, InvitationType, MatchSide } from "@/app/api/graphql/types/graphql";
 import { checkForOverlap, getGoogleClient } from "@/lib/google";
-import { google } from "googleapis";
+import { calendar_v3, google } from "googleapis";
 import { db } from "@/lib/database/mongo";
 import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { ObjectId, WithId } from "mongodb";
+import { ENDTIME_CONVERSION } from "@/components/scrims/CreateScrimForm";
 
 
 const CreateScrimMutation = graphql(`
@@ -51,7 +52,7 @@ export async function getOrganization(user_id: string | undefined) {
 }
 
 export async function createScrimmageAction(payload: CreateScrimPayload) {
-    
+
     const { createScrimmage } = await grafbase.request(CreateScrimMutation, {
         input: {
             team: payload.roster,
@@ -86,12 +87,12 @@ export type CalendarResult =
 export async function getCalendarInfo(): Promise<CalendarResult> {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) return { connected: false };
-    
+
     const account = await db.collection("account").findOne(
         { userId: new ObjectId(session.user.id), providerId: "google" }
     ) as WithId<{ accessToken: string, refreshToken: string }> | null;
     if (!account) return { connected: false };
-    
+
     try {
         const googleAuth = getGoogleClient(account.accessToken, account.refreshToken);
         const calendar = google.calendar({ version: "v3", auth: googleAuth });
@@ -123,7 +124,7 @@ export async function getCalendarInfo(): Promise<CalendarResult> {
 }
 
 
-export async function insertCalendarInfo({ summary, startTime, endTime, timeZone }: { summary: string, startTime: string, endTime: string, timeZone: string }) {
+export async function insertCalendarInfo({ summary, startTime, endTime, timeZone }: { summary: string, startTime: string, endTime: string, timeZone: string }): Promise<{ success: boolean, response: string } | undefined> {
     const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session?.user) return;
@@ -135,8 +136,8 @@ export async function insertCalendarInfo({ summary, startTime, endTime, timeZone
     const overlap = await checkForOverlap(calendar, { startTime, endTime });
 
     if (overlap.hasConflict) {
-       const errorMessage = overlap.conflictingEvents.map(event => event.title).join(", ");
-       throw Error("Conflicting events: "+errorMessage)
+        const errorMessage = overlap.conflictingEvents.map(event => event.title).join(", ");
+        return { success: false, response: "Conflicting events: " + errorMessage }
     }
 
     const event = {
@@ -162,5 +163,23 @@ export async function insertCalendarInfo({ summary, startTime, endTime, timeZone
         calendarId: 'primary',
         requestBody: event,
     });
-    return response;
+
+    if (response.status !== 200) {
+        return { success: false, response: "An unknown error occured" }
+    }
+    return { success: true, response: "Event was successfully created." };
+}
+
+export async function createGoogleScrimmageEvent(scheduledAt: Date, teamName: string, bestOf: BestOf) {
+    const endTime = new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf])
+    const response = await insertCalendarInfo({
+        summary: "Scrimmage vs. " + teamName,
+        startTime: scheduledAt.toISOString(),
+        endTime: endTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
+
+    if (response && !response.success) {
+        throw Error(response.response)
+    }
 }

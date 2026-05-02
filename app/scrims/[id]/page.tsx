@@ -7,8 +7,8 @@ import { notFound } from "next/navigation";
 import { Scrim, ScrimDetail, ScrimDetailProps } from "@/components/scrims/ScrimDetail";
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
 import { convertSteam64toSteam32 } from "@/lib/deadlock";
-import { getStatlockerRanks } from "@/lib/actions/deadlockapi";
 import { ArrayElement } from "@/lib/utils";
+import { getStatlockerRanksAction } from "@/app/profile/[id]/actions";
 
 const GetViewerOrgQuery = graphql(`
     query GetViewerOrg($user_id: String!) {
@@ -98,7 +98,7 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     if (!scrim) notFound();
 
     const steamIds = scrim.opponentOrg?.members.map(member => convertSteam64toSteam32(member.user.steam?.id ?? "")) ?? [];
-    const stats = await getStatlockerRanks(steamIds);
+    const stats = await getStatlockerRanksAction(steamIds);
 
     const opponentOrg = scrim.opponentOrg;
     if (opponentOrg) {
