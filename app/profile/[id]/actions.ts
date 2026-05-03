@@ -8,6 +8,8 @@ import { auth } from "@/lib/database/auth";
 import { headers } from "next/headers";
 import { cacheLife, revalidatePath } from "next/cache";
 import { getStatlockerRank, getStatlockerRanks } from "@/lib/actions/deadlockapi";
+import { LiveTeam } from "@/lib/socket/teams";
+import { RespondToScrimInviteMutation } from "@/lib/database/shared-graphs";
 
 const AcceptOrgInviteMutation = graphql(`
   mutation ProfileAcceptOrgInvite($org_id: String!, $user_id: String!) {
@@ -37,26 +39,20 @@ export async function declineProfileOrgInviteAction(orgId: string, profileId: st
     revalidatePath(`/profile/${profileId}`);
 }
 
-const RespondToScrimInviteMutation = graphql(`
-  mutation ProfileRespondToScrimInvite($invitation_id: String!, $status: InvitationStatus!) {
-    respondToInvitation(input: { invitation_id: $invitation_id, status: $status }) {
-      status
-    }
-  }
-`);
 
-export async function acceptScrimInviteAction(invitationId: string, profileId: string): Promise<void> {
+
+export async function acceptScrimInviteAction(scrimmage_id: string, user_id: string): Promise<void> {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) throw new Error("Unauthorized");
-    await grafbase.request(RespondToScrimInviteMutation, { invitation_id: invitationId, status: InvitationStatus.Accepted });
-    revalidatePath(`/profile/${profileId}`);
+    await grafbase.request(RespondToScrimInviteMutation, { scrimmage_id, user_id, status: InvitationStatus.Accepted });
+    revalidatePath(`/profile/${user_id}`);
 }
 
-export async function declineScrimInviteAction(invitationId: string, profileId: string): Promise<void> {
+export async function declineScrimInviteAction(scrimmage_id: string, user_id: string): Promise<void> {
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) throw new Error("Unauthorized");
-    await grafbase.request(RespondToScrimInviteMutation, { invitation_id: invitationId, status: InvitationStatus.Declined });
-    revalidatePath(`/profile/${profileId}`);
+    await grafbase.request(RespondToScrimInviteMutation, { scrimmage_id, user_id, status: InvitationStatus.Declined });
+    revalidatePath(`/profile/${user_id}`);
 }
 
 // ─── Team invite notification ──────────────────────────────────────────────

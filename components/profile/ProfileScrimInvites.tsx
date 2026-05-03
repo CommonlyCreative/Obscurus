@@ -8,7 +8,8 @@ import {
     acceptScrimInviteAction,
     declineScrimInviteAction,
 } from "@/app/profile/[id]/actions";
-import { MatchSide, UserProfileQuery } from "@/app/api/graphql/types/graphql";
+import { InvitationType, MatchSide, UserProfileQuery } from "@/app/api/graphql/types/graphql";
+import { declineChallengeAction } from "@/app/scrims/[id]/actions";
 
 type ScrimInvite = ArrayElement<UserProfileQuery["getScrimmageInvitations"]>;
 
@@ -60,21 +61,26 @@ function ScrimInviteCard({ invite, profileId }: { invite: ScrimInvite; profileId
                     variant="secondary"
                     className="text-danger border-danger/20 hover:border-danger/40 px-3"
                     onClick={() =>
-                        startDecline(() => declineScrimInviteAction(invite._id, profileId))
+                        startDecline(() => {
+                            if (invite.type === InvitationType.LeaderInvite)
+                                declineChallengeAction(invite.scrimmage._id, profileId)
+                            else
+                                declineScrimInviteAction(invite.scrimmage._id, profileId)
+                        })
                     }
                     disabled={isPending}
                 >
                     {declinePending ? "Declining…" : "Decline"}
                 </Button>
-                <Button
+                {/* <Button
                     onClick={() =>
-                        startAccept(() => acceptScrimInviteAction(invite._id, profileId))
+                        router.push(`/scrim/${invite.scrimmage._id}`)
                     }
                     disabled={isPending}
                     className="px-3"
                 >
                     {acceptPending ? "Accepting…" : "Accept"}
-                </Button>
+                </Button> */}
             </div>
         </div>
     );
@@ -92,7 +98,7 @@ export function ProfileScrimInvites({
     return (
         <div className="mb-6 space-y-2">
             {invites.map(invite => (
-                <ScrimInviteCard key={invite._id} invite={invite} profileId={profileId} />
+                <ScrimInviteCard key={invite.scrimmage._id} invite={invite} profileId={profileId} />
             ))}
         </div>
     );

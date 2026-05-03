@@ -5,6 +5,8 @@ import { getRankByMMR } from "@/lib/deadlock";
 import { isActiveMember } from "@/hooks/useTeamSocket";
 import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
+import { getRankImage } from "@/lib/rankImage";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 export function PlayerSlot({
     player,
@@ -22,9 +24,8 @@ export function PlayerSlot({
     onRemove?: () => void;
 }) {
     const { data: session } = authClient.useSession();
-
-
     const isMe = !!session?.user.id && !!player && session.user.id === player.userId;
+
     if (!player) {
         return (
             <div onClick={() => isOwner && onEmptySlotClick()} className={cn("flex items-center gap-3 p-3 rounded-lg border border-dashed border-edge group", isOwner && "hover:border-primary/30 transition-colors cursor-pointer")}>
@@ -44,11 +45,13 @@ export function PlayerSlot({
         );
     }
 
+    const stats = getRankByMMR(player.mmr)
+
     return (
-        <div className={cn(`flex items-center gap-3 p-3 rounded-lg transition-colors`, 
-            player.status === "JOINED" ? 
-            `border ${isMe ? "border-primary/30 bg-primary/5" : "border-edge hover:border-edge/70"}` 
-            : `border border-dashed ${isMe ? "border-primary/30 bg-primary/5" : "border-edge hover:border-edge/70"}`)}>
+        <div className={cn(`flex items-center gap-3 p-3 rounded-lg transition-colors`,
+            player.status === "JOINED" ?
+                `border ${isMe ? "border-primary/30 bg-primary/5" : "border-edge hover:border-edge/70"}`
+                : `border border-dashed ${isMe ? "border-primary/30 bg-primary/5" : "border-edge hover:border-edge/70"}`)}>
             <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-sm font-bold text-foreground shrink-0">
                 {player.name.charAt(0)}
             </div>
@@ -61,9 +64,22 @@ export function PlayerSlot({
                         </span>
                     )}
                 </div>
-                <div className="text-xs text-muted mt-0.5">{getRankByMMR(player.mmr)?.rank.name}</div>
+                {stats && <div className="text-xs text-muted mt-0.5">{stats.rank.name}</div>}
             </div>
             {player.status === "INVITED" && <RoleTag role={player.status} />}
+            {stats && <Tooltip>
+                <TooltipTrigger>
+                    <img
+                        src={getRankImage(player.mmr)}
+                        alt={stats.rank.name}
+                        loading="lazy"
+                        className="w-12"
+                    />
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>{`${stats.rank.name} ${stats.division}`}</p>
+                </TooltipContent>
+            </Tooltip>}
             {onRemove && !isMe && (
                 <button
                     onClick={e => { e.stopPropagation(); onRemove(); }}

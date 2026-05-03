@@ -78,8 +78,8 @@ type Team {
 # Created for every member of both teams when scheduledAt is set.
 # Substitutes can be users outside the org (flexibility for managers).
 type ScrimmageInvitation {
-    _id: ID!
     scrimmage: Scrimmage!
+    organization: Organization
     type: InvitationType!
     user: User!
     side: MatchSide!                # Which team this invitation is for
@@ -190,6 +190,7 @@ input ScrimmageInvitationInput {
     user_id: String!
     side: MatchSide!
     type: InvitationType!
+    organization_id: String
 }
 
 input UpdateScrimmageInput {
@@ -201,7 +202,7 @@ input UpdateScrimmageInput {
 # Used by the opponent manager to submit their 6-player roster after accepting a scheduled match
 input SetOpponentRosterInput {
     scrimmage_id: String!
-    org_id: String
+    leader_id: String!
     team: [String!]!             # Exactly 6 user IDs
 }
 
@@ -215,9 +216,9 @@ input UpdateRosterSlotInput {
 }
 
 input RespondToInvitationInput {
-    invitation_id: String!
+    scrimmage_id: String!
+    user_id: String!
     status: InvitationStatus!   # ACCEPTED or DECLINED only
-    team: TeamInput
 }
 
 # A 6-player side in a scrimmage
@@ -258,9 +259,9 @@ extend type Mutation {
     joinScrimmage(scrimmage_id: String!, org_id: String, team: [String!]!): Scrimmage
     leaveScrimmage(scrimmage_id: String!): Scrimmage
 
-    # Private scrimmage: targetOrg accepts or declines the challenge
-    acceptScrimmageChallenge(scrimmage_id: String!, org_id: String!): Scrimmage
-    declineScrimmageChallenge(scrimmage_id: String!, org_id: String!): Scrimmage
+    # Private scrimmage: only leaders can accept challenge
+    acceptScrimmageChallenge(scrimmage_id: String!, user_id: String!): Scrimmage
+    declineScrimmageChallenge(scrimmage_id: String!, user_id: String!): Scrimmage
 
     # Scheduled scrimmage: opponent sets their roster (during SCHEDULING phase)
     setOpponentRoster(input: SetOpponentRosterInput!): Scrimmage
@@ -268,7 +269,7 @@ extend type Mutation {
     # In-place roster swap — manager removes unavailable player and fills the slot immediately
     updateRosterSlot(input: UpdateRosterSlotInput!): Scrimmage
 
-    # Player RSVP for scheduled scrimmages
+    # Player RSVP for scheduled scrimmages | ONLY FOR SCHEDULED SCRIMS
     respondToInvitation(input: RespondToInvitationInput!): ScrimmageInvitation
 
     # Manager assigns a substitute for a user who declined

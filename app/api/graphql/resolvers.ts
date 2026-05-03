@@ -209,7 +209,6 @@ export const resolvers: Resolvers = {
     // Field resolvers — ScrimmageInvitation
     // =========================================================================
     ScrimmageInvitation: {
-        _id: (parent) => (parent as any)._id?.toString() ?? '',
         scrimmage: async (parent, _, { dataSources: { scrimmages } }) => {
             const inv = parent as any;
             const scrimmageId = inv._scrimmageId;
@@ -222,6 +221,11 @@ export const resolvers: Resolvers = {
             const user = await users.getGraphQLUser(inv.user);
             if (!user) throw new Error("Failed to fetch invitation user");
             return user;
+        },
+        organization: async (parent, _, { dataSources: { organizations } }) => {
+            const inv = parent as any as { organization: string };
+            const org = await organizations.getOrganization(inv.organization)
+            return org as any as WithId<Organization> | null;
         },
     },
 
@@ -450,15 +454,15 @@ export const resolvers: Resolvers = {
             }
             return scrim as any as WithId<Scrimmage> | null;
         },
-        acceptScrimmageChallenge: async (_, { scrimmage_id, org_id }, { dataSources: { scrimmages } }) => {
-            return scrimmages.acceptScrimmageChallenge(scrimmage_id, org_id) as any;
+        acceptScrimmageChallenge: async (_, { scrimmage_id, user_id }, { dataSources: { scrimmages } }) => {
+            return scrimmages.acceptScrimmageChallenge(scrimmage_id, user_id) as any;
         },
-        declineScrimmageChallenge: async (_, { scrimmage_id, org_id }, { dataSources: { scrimmages } }) => {
-            return scrimmages.declineScrimmageChallenge(scrimmage_id, org_id) as any;
+        declineScrimmageChallenge: async (_, { scrimmage_id, user_id }, { dataSources: { scrimmages } }) => {
+            return scrimmages.declineScrimmageChallenge(scrimmage_id, user_id) as any;
         },
         setOpponentRoster: async (_, { input }, { dataSources: { scrimmages } }) => {
-            const { scrimmage_id, team } = input;
-            return scrimmages.setOpponentRoster(scrimmage_id, team) as any;
+            const { scrimmage_id, leader_id, team } = input;
+            return scrimmages.setOpponentRoster(scrimmage_id, leader_id, team) as any;
         },
         updateRosterSlot: async (_, { input }, { dataSources: { scrimmages } }) => {
             const { scrimmage_id, side, remove_id, replace_id } = input;
@@ -565,7 +569,7 @@ export const resolvers: Resolvers = {
         },
         // --- Scrimmage Invitations ---
         respondToInvitation: async (_, { input }, { dataSources: { scrimmages } }) => {
-            return scrimmages.respondToInvitation(input.invitation_id, input.status as any) as any;
+            return scrimmages.respondToInvitation(input.scrimmage_id, input.user_id, input.status) as any;
         },
 
         // --- Org Requests ---

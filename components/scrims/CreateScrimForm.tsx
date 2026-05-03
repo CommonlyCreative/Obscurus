@@ -6,7 +6,7 @@ import { Button } from "@/components/shared/Button";
 import { RosterSelector } from "./RosterSelector";
 import { LiveTeamPicker } from "./LiveTeamPicker";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
-import { createGoogleScrimmageEvent, createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
+import { checkGoogleAvailability, createGoogleScrimmageEvent, createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
 import { BestOf, CreateScrimPageQuery, MatchSide, ScrimmageInvitationInput } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
 import type { OrgMember, Region } from "./types";
@@ -16,6 +16,7 @@ import { UserCalendarView } from "./UserCalendarView";
 import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
 import { socket } from "@/lib/socket/socket-client";
 import { notifyScrimmageInvitation } from "@/app/profile/[id]/actions";
+import { toast } from "sonner";
 
 const BEST_OF_OPTIONS: { value: BestOf; label: string; sub: string }[] = [
     { value: BestOf.One, label: "Bo1", sub: "Single game" },
@@ -116,41 +117,54 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                 const scheduledAt = scheduled && scheduledDate
                     ? new Date(scheduledDate)
                     : null;
+                const endTime = scheduledAt ? new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf]) : null
                 let opponentOrg = await getOrganization(targetLeaderId ?? undefined);
-                if (scheduledAt && opponentOrg) {
-                    await createGoogleScrimmageEvent(scheduledAt, opponentOrg.name, bestOf)
-                }
-                try {
-                    const result = await createScrimmageAction({
-                        note,
-                        isPrivate,
-                        host_id: userId,
-                        wagerAmount,
-                        hostOrgId: orgAffiliated && org ? org._id : null,
-                        roster: rosterIds,
-                        orgAffiliated,
-                        targetLeaderId,
-                        opponentOrg_id: opponentOrg?._id ?? null,
-                        scheduledAt: scheduledAt?.getTime() ?? null,
-                        bestOf,
-                    });
 
-                    if (result) {
-                        if (targetLeaderId) {
-                            const teamName = orgAffiliated && org ? org.name : liveTeam?.name ?? "Unknown Team";
-                            const notification = await notifyScrimmageInvitation(targetLeaderId, teamName)
-                            socket.emit("notify", notification)
-                        }
-                        router.push(`/scrims/${result._id}`);
-                    } else {
-                        setError("Failed to create scrimmage. Please try again.");
+                if (scheduledAt && endTime && opponentOrg) {
+                    const overlap = await checkGoogleAvailability({ startTime: scheduledAt.toISOString(), endTime: endTime.toISOString() })
+
+                    if (overlap && overlap.hasConflict) {
+                        const errorMessage = overlap.conflictingEvents.map(event => event.title).join(", ");
+                        return setError(`Error scheduling event to Google calendar: [Conflicting events: ${errorMessage}]`);
                     }
-                } catch {
-                    setError("Something went wrong. Please try again.");
                 }
-            } catch (err) {
-                setError(`Error scheduling Google calendar: [${err}]`)
+
+
+                const result = await createScrimmageAction({
+                    note,
+                    isPrivate,
+                    host_id: userId,
+                    wagerAmount,
+                    hostOrgId: orgAffiliated && org ? org._id : null,
+                    roster: rosterIds,
+                    targetLeaderId,
+                    opponentOrg_id: opponentOrg?._id ?? null,
+                    scheduledAt: scheduledAt?.getTime() ?? null,
+                    bestOf,
+                });
+
+                if (scheduledAt && endTime && opponentOrg && result) {
+                    try {
+                        await createGoogleScrimmageEvent(result._id, opponentOrg.name, scheduledAt, endTime)
+                    } catch (err) {
+                        toast.error(`Error scheduling Google calendar: [${err}]`)
+                    }
+                }
+
+                if (result) {
+                    if (targetLeaderId) {
+                        const teamName = orgAffiliated && org ? org.name : liveTeam?.name ?? "Unknown Team";
+                        const notification = await notifyScrimmageInvitation(targetLeaderId, teamName)
+                        socket.emit("notify", notification)
+                    }
+                    router.push(`/scrims/${result._id}`);
+                } else {
+                    setError("Failed to create scrimmage. Please try again.");
+                }
+            } catch {
+                setError("Something went wrong. Please try again.");
             }
+
         });
     }
 

@@ -9,6 +9,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { Ban } from "lucide-react";
+import { getRankImage } from "@/lib/rankImage";
 
 export function ProfileHeader({
     profile,
@@ -19,7 +20,7 @@ export function ProfileHeader({
     heroes: DeadlockHero[];
     editHref?: string;
 }) {
-    const rank = getRankByMMR(profile.stats?.mmr ?? 0) ?? { rank: Rank.INITIATE, division: 1 };
+    const rank = getRankByMMR(profile.stats?.mmr ?? 0);
     return (
         <div className="border-b border-edge bg-surface">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -59,14 +60,24 @@ export function ProfileHeader({
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mb-3">
                             {/* <RoleTag role={profile.role} /> */}
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${rank.rank.color} ${rank.rank.bg}`}>
-                                {rank.rank.name} {rank.division > 0 ? `- Division ${rank.division}` : ""}
-                            </span>
+
 
                         </div>
                         <p className="text-sm text-dimmed leading-relaxed max-w-lg">{profile.bio}</p>
                     </div>
-
+                    {profile.stats?.mmr && rank && <Tooltip>
+                        <TooltipTrigger>
+                            <img
+                                src={getRankImage(profile.stats.mmr)}
+                                alt={rank.rank.name}
+                                loading="lazy"
+                                className="w-32"
+                            />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{`${rank.rank.name} ${rank.division}`}</p>
+                        </TooltipContent>
+                    </Tooltip>}
                     {/* Edit button */}
                     {editHref && (
                         <Button variant="secondary" href={editHref} className="shrink-0">

@@ -21,7 +21,9 @@ import {
     acceptChallengeWithRosterAction,
     joinScrimmageAction,
     respondToInvitationAction,
+    setOpponentRoster,
 } from "@/app/scrims/[id]/actions";
+import { InvitationType } from "@/app/api/graphql/server";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -43,11 +45,6 @@ export interface ScrimDetailProps {
     isOpponentMember: boolean;
     isOpponentOrgManager: boolean;
     hostOrgId: string | null;
-    opponentOrg: (Omit<NonNullable<Scrim["opponentOrg"]>, "members"> & {
-        members: (ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & {
-            mmr: number
-        })[]
-    }) | null;
     viewerOrgId: string | null;
 }
 
@@ -127,7 +124,6 @@ export function ScrimDetail({
     isHostMember,
     isOpponentMember,
     hostOrgId: _hostOrgId,
-    opponentOrg,
     isOpponentOrgManager,
     viewerOrgId: _viewerOrgId,
 }: ScrimDetailProps) {
@@ -138,19 +134,21 @@ export function ScrimDetail({
     const { teams: liveTeams } = useTeamSocket(userId ? [userId] : []);
     const liveTeam = userId ? findTeam(liveTeams, userId) : undefined;
 
-    
     const myInvitation = userId
-    ? (scrim.invitations.find(inv => inv.user._id === userId) ?? null)
-    : null;
+        ? (scrim.invitations.find(inv => inv.user._id === userId) ?? null)
+        : null;
+
     const [inviteStatus, setInviteStatus] = useState<InvitationStatus | null>(
         myInvitation?.status ?? null
     );
-    
-    const activeOrgMembers = opponentOrg?.members.filter(m => m.status === OrgMemberStatus.Active) ?? [];
+
+    const myOrg = myInvitation?.organization;
+
+    const activeOrgMembers = myOrg?.members.filter(m => m.status === OrgMemberStatus.Active) ?? [];
     const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(
-        () => new Set((opponentOrg?.coreTeam ?? []).slice(0, 6).map(m => m._id))
+        () => new Set((myOrg?.coreTeam ?? []).slice(0, 6).map(m => m._id))
     );
-    
+
     function toggleTeamMember(memberId: string) {
         setSelectedTeamIds(prev => {
             const next = new Set(prev);
@@ -162,7 +160,7 @@ export function ScrimDetail({
             return next;
         });
     }
-    
+
     const [live, setLive] = useState({
         status: scrim.status,
         result: scrim.result ?? null as ScrimmageResult | null,
@@ -171,11 +169,11 @@ export function ScrimDetail({
         partyCode: scrim.partyCode ?? null as string | null,
         matches: scrim.matches,
     });
-    
+
     function applyPatch(update: Partial<typeof live>) {
         setLive(prev => ({ ...prev, ...update }));
     }
-    
+
     function applyAndBroadcast(overrides: Partial<typeof live>) {
         const next = { ...live, ...overrides };
         setLive(next);
@@ -194,7 +192,7 @@ export function ScrimDetail({
             })),
         });
     }
-    
+
     const { broadcastPatch, broadcastRefresh } = useScrimSocket(
         scrim._id,
         (socketPatch: ScrimPatch) => applyPatch({
@@ -207,7 +205,7 @@ export function ScrimDetail({
         }),
         () => router.refresh(),
     );
-    
+
     function refresh(fn: () => Promise<unknown>) {
         setError(null);
         startTransition(async () => {
@@ -220,7 +218,7 @@ export function ScrimDetail({
             }
         });
     }
-    
+
     const { status, result, readyHost, readyOpponent } = live;
     const isActive = status === ScrimmageStatus.Active;
     const isCompleted = status === ScrimmageStatus.Completed;
@@ -232,23 +230,23 @@ export function ScrimDetail({
     const hostTeamSize = scrim.hostTeam?.members.length ?? 0;
     const oppTeamSize = scrim.opponentTeam?.members.length ?? 0;
     const liveTeamIds = liveTeam?.members.map((m) => m.userId) ?? [];
-    const isOrgAffiliated = scrim.hostOrg && scrim.opponentOrg;
     const canJoin = status === ScrimmageStatus.Open
-    && !isHost && !isHostMember && !isOpponentMember
-    && liveTeamIds.length === 6;
-    
+        && !isHost && !isHostMember && !isOpponentMember
+        && liveTeamIds.length === 6;
+
     const showReadyCheck = !isFinished && userId && showReadyState;
     const showJoin = status === ScrimmageStatus.Open && userId && !isHost && !isHostMember;
     const showInvitation = myInvitation && !isFinished && !isActive && myInvitation.status === InvitationStatus.Pending;
-    const showAcceptChallenge = status === ScrimmageStatus.Pending && opponentOrg && isOpponentOrgManager;
+    const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!myOrg&& !!userId; //TODO;
+    const isOrgChallenge = !!myInvitation && !!myInvitation.organization;
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
-    
+
     function handleRespondToInvite(newStatus: InvitationStatus) {
         if (!myInvitation) return;
         setInviteStatus(newStatus);
-        refresh(() => respondToInvitationAction(myInvitation._id, newStatus, !isOrgAffiliated ? liveTeam : null));
+        refresh(() => respondToInvitationAction(scrim._id, myInvitation.user._id, newStatus));
     }
-    
+
     function handleReady(side: MatchSide, isReady: boolean) {
         setError(null);
         startTransition(async () => {
@@ -256,98 +254,98 @@ export function ScrimDetail({
                 const data = await (isReady
                     ? unreadyAction(scrim._id, side)
                     : readyUpAction(scrim._id, side));
-                    if (data) {
-                        applyAndBroadcast({
-                            status: data.status as ScrimmageStatus,
-                            readyHost: data.readyHost,
-                            readyOpponent: data.readyOpponent,
-                        });
-                    }
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
+                if (data) {
+                    applyAndBroadcast({
+                        status: data.status as ScrimmageStatus,
+                        readyHost: data.readyHost,
+                        readyOpponent: data.readyOpponent,
+                    });
                 }
-            });
-        }
-        
-        function handleEndEarly() {
-            setError(null);
-            startTransition(async () => {
-                try {
-                    const data = await endScrimmageAction(scrim._id);
-                    if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
-                    setConfirmEnd(false);
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
-                }
-            });
-        }
-        
-        function handleCancel() {
-            setError(null);
-            startTransition(async () => {
-                try {
-                    const data = await cancelScrimmageAction(scrim._id);
-                    if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
-                }
-            });
-        }
-        
-        function handleJoin() {
-            setError(null);
-            startTransition(async () => {
-                try {
-                    const action = await joinScrimmageAction(scrim._id, liveTeamIds);
-                    applyAndBroadcast({ status: action?.status });
-                    broadcastRefresh();
-                    router.refresh();
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
-                }
-            });
-        }
-        
-        function handleLeave() {
-            setError(null);
-            startTransition(async () => {
-                try {
-                    const action = await leaveScrimmageAction(scrim._id, opponentOrg?._id ?? "");
-                    applyAndBroadcast({ status: action?.status });
-                    broadcastRefresh();
-                    router.refresh();
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
-                }
-            });
-        }
-        
-        function handleAction(action: Promise<{ status: ScrimmageStatus } | null | undefined>) {
-            setError(null);
-            startTransition(async () => {
-                try {
-                    const response = await action;
-                    applyAndBroadcast({ status: response?.status });
-                    broadcastRefresh();
-                    router.refresh();
-                } catch (e) {
-                    setError(e instanceof Error ? e.message : "Action failed");
-                }
-            });
-        }
-        
-        function handleMatchLogPatch(patch: MatchLogPatch) {
-            const overrides: Partial<typeof live> = {};
-            if (patch.status !== undefined) overrides.status = patch.status as ScrimmageStatus;
-            if (patch.result !== undefined) overrides.result = patch.result as ScrimmageResult | null;
-            if (patch.matches !== undefined) overrides.matches = patch.matches as NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["matches"];
-            if (patch.partyCode !== undefined) overrides.partyCode = patch.partyCode ?? null;
-            applyAndBroadcast(overrides);
-            router.refresh();
-        }
-        
-        return (
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleEndEarly() {
+        setError(null);
+        startTransition(async () => {
+            try {
+                const data = await endScrimmageAction(scrim._id);
+                if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
+                setConfirmEnd(false);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleCancel() {
+        setError(null);
+        startTransition(async () => {
+            try {
+                const data = await cancelScrimmageAction(scrim._id);
+                if (data) applyAndBroadcast({ status: data.status as ScrimmageStatus });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleJoin() {
+        setError(null);
+        startTransition(async () => {
+            try {
+                const action = await joinScrimmageAction(scrim._id, liveTeamIds);
+                applyAndBroadcast({ status: action?.status });
+                broadcastRefresh();
+                router.refresh();
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleLeave() {
+        setError(null);
+        startTransition(async () => {
+            try {
+                const action = await leaveScrimmageAction(scrim._id);
+                applyAndBroadcast({ status: action?.status });
+                broadcastRefresh();
+                router.refresh();
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleAction(action: Promise<{ status: ScrimmageStatus } | null | undefined>) {
+        setError(null);
+        startTransition(async () => {
+            try {
+                const response = await action;
+                applyAndBroadcast({ status: response?.status });
+                broadcastRefresh();
+                router.refresh();
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Action failed");
+            }
+        });
+    }
+
+    function handleMatchLogPatch(patch: MatchLogPatch) {
+        const overrides: Partial<typeof live> = {};
+        if (patch.status !== undefined) overrides.status = patch.status as ScrimmageStatus;
+        if (patch.result !== undefined) overrides.result = patch.result as ScrimmageResult | null;
+        if (patch.matches !== undefined) overrides.matches = patch.matches as NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["matches"];
+        if (patch.partyCode !== undefined) overrides.partyCode = patch.partyCode ?? null;
+        applyAndBroadcast(overrides);
+        router.refresh();
+    }
+
+    return (
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
 
             {/* ── VS Match Card ── */}
             <div className="bg-surface border border-edge rounded-lg overflow-hidden">
@@ -382,9 +380,9 @@ export function ScrimDetail({
                         <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">Host</div>
                         <div className="text-2xl flex items-center gap-3 font-black text-foreground leading-tight">
                             {scrim.hostOrg?.name ?? scrim.host.name}
-                            <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
+                            {scrim.hostOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
                                 ORG
-                            </span>
+                            </span>}
                         </div>
                         {showReadyState && (
                             <div className={cn("text-xs font-semibold mt-2 flex items-center gap-1.5", readyHost ? "text-success" : "text-muted")}>
@@ -404,8 +402,12 @@ export function ScrimDetail({
                         <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">
                             {scrim.opponentOrg || scrim.opponentTeam ? "Opponent" : "Awaiting"}
                         </div>
-                        <div className={cn("text-2xl font-black leading-tight", scrim.opponentOrg || scrim.opponentTeam ? "text-foreground" : "text-edge")}>
-                            {scrim.opponentOrg?.name ?? scrim.opponentTeam?.leader.name ?? "Open"}
+                        
+                        <div className={cn("text-2xl justify-end flex items-center gap-3 font-black leading-tight", scrim.opponentOrg || scrim.opponentTeam ? "text-foreground" : "text-edge")}>
+                            {scrim.opponentOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
+                                ORG
+                            </span>}
+                            {scrim.opponentOrg?.name ?? scrim.opponentTeam?.leader.name ?? <p className="italic text-muted">TBD</p>}
                         </div>
                         {showReadyState && scrim.opponentTeam && (
                             <div className={cn("text-xs font-semibold mt-2 flex items-center justify-end gap-1.5", readyOpponent ? "text-success" : "text-muted")}>
@@ -697,60 +699,55 @@ export function ScrimDetail({
                     <div className="flex items-center justify-between">
                         <div>
                             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Accept Challenge</h2>
-                            <p className="text-sm text-dimmed mt-1">Select your 6-player roster to accept this scrimmage.</p>
+                            {isOrgChallenge && <p className="text-sm text-dimmed mt-1">Select your 6-player roster to accept this scrimmage.</p>}
                         </div>
                         <span className={cn("text-sm font-bold", selectedTeamIds.size === 6 ? "text-success" : "text-muted")}>
                             {selectedTeamIds.size}/6
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {activeOrgMembers.length === 0 ? (
-                            <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
-                        ) : activeOrgMembers.map(member => {
-                            const inTeam = selectedTeamIds.has(member.user._id);
-                            const disabled = !inTeam && selectedTeamIds.size >= 6;
-                            const stats = getRankByMMR(member.mmr)
-                            return (
-                                <button
-                                    key={member.user._id}
-                                    type="button"
-                                    onClick={() => toggleTeamMember(member.user._id)}
-                                    disabled={disabled}
-                                    className={cn(
-                                        "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
-                                        inTeam
-                                            ? "border-primary/40 bg-primary/5 text-foreground"
-                                            : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                                    )}
-                                >
-                                    <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
-                                        {member.user.name.charAt(0)}
-                                    </div>
-                                    <span className="font-medium flex-1 text-xs truncate">{member.user.name}</span>
-                                    {stats && (
-                                        <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
+                    {isOrgChallenge &&
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {activeOrgMembers.length === 0 ? (
+                                <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
+                            ) : activeOrgMembers.map(member => {
+                                const inTeam = selectedTeamIds.has(member.user._id);
+                                const disabled = !inTeam && selectedTeamIds.size >= 6;
+                                const stats = getRankByMMR(member.user.stats?.mmr ?? 0)
+                                return (
+                                    <button
+                                        key={member.user._id}
+                                        type="button"
+                                        onClick={() => toggleTeamMember(member.user._id)}
+                                        disabled={disabled}
+                                        className={cn(
+                                            "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
+                                            inTeam
+                                                ? "border-primary/40 bg-primary/5 text-foreground"
+                                                : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        )}
+                                    >
+                                        <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                            {member.user.name.charAt(0)}
+                                        </div>
+                                        <span className="font-medium flex-1 text-xs truncate">{member.user.name}</span>
+                                        {stats && (
+                                            <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>}
 
                     <div className="flex items-center gap-3 pt-1 border-t border-edge">
                         <Button
-                            onClick={() => {
-                                handleAction(acceptChallengeWithRosterAction(scrim._id, opponentOrg!._id, Array.from(selectedTeamIds), myInvitation))
-                                if (myInvitation) setInviteStatus(InvitationStatus.Accepted);
-                            }}
-                            disabled={pending || selectedTeamIds.size < 6}
+                            onClick={() => handleAction(acceptChallengeWithRosterAction(scrim._id, userId, isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds)))}
+                            disabled={pending || (isOrgChallenge && selectedTeamIds.size < 6) || (!isOrgChallenge && liveTeamIds.length < 6)}
                         >
                             Accept Challenge
                         </Button>
                         <button
-                            onClick={() => {
-                                handleAction(declineChallengeAction(scrim._id, opponentOrg!._id, myInvitation))
-                                if (myInvitation) setInviteStatus(InvitationStatus.Declined);
-                            }}
+                            onClick={() => handleAction(declineChallengeAction(scrim._id, userId))}
                             disabled={pending}
                             className="px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
                         >

@@ -7,7 +7,7 @@ import { graphql } from "../../../api/graphql/types";
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
 import { EditProfileForm, OrgUserSearch } from "@/components/profile/EditProfileForm";
 import { cn } from "@/lib/utils";
-import { getHeroes } from "@/lib/actions/deadlockapi";
+import { getHeroes } from "@/app/scrims/[id]/cache";
 
 const EditProfilePageQuery = graphql(`
   query EditProfilePage($user_id: String!) {

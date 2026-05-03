@@ -10,6 +10,16 @@ import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
 import { NotificationType, OrgRequestStatus, SendNotificationMutation } from "@/app/api/graphql/types/graphql";
 import { SendNotificationM } from "@/lib/shared-graphs";
+import { getGoogleClient } from "@/lib/google";
+import { google } from "googleapis";
+
+// Duration per best-of type (mirrors CreateScrimForm ENDTIME_CONVERSION)
+const BESTOF_DURATION_MS: Record<string, number> = {
+    ONE:       1 * 60 * 60 * 1000,
+    THREE:     2 * 60 * 60 * 1000,
+    FIVE:      4 * 60 * 60 * 1000,
+    UNLIMITED: 4 * 60 * 60 * 1000,
+};
 
 // ─── GraphQL mutations ─────────────────────────────────────────────────────
 
@@ -103,12 +113,62 @@ export type UserRow = {
 
 export type ScrimmageRow = {
     _id: string;
-    host: string;
     status: string;
     wagerAmount: number;
     region: string;
     bestOf: string;
+    isPrivate: boolean;
+    scheduledAt: number | null;
+    hostId: string;
+    hostName: string;
+    hostOrgName: string | null;
+    opponentOrgName: string | null;
     createdAt: number;
+};
+
+export type ScrimDetailRow = {
+    _id: string;
+    status: string;
+    region: string;
+    bestOf: string;
+    isPrivate: boolean;
+    wagerAmount: number;
+    note: string | null;
+    partyCode: string | null;
+    readyHost: boolean;
+    readyOpponent: boolean;
+    result: string | null;
+    scheduledAt: number | null;
+    hostId: string;
+    hostName: string;
+    hostOrgId: string | null;
+    hostOrgName: string | null;
+    hostTeamName: string | null;
+    hostTeamLeaderId: string | null;
+    hostTeamLeaderName: string | null;
+    hostTeamMembers: { _id: string; name: string }[];
+    opponentOrgId: string | null;
+    opponentOrgName: string | null;
+    opponentTeamName: string | null;
+    opponentTeamLeaderId: string | null;
+    opponentTeamLeaderName: string | null;
+    opponentTeamMembers: { _id: string; name: string }[];
+    invitations: {
+        userId: string;
+        userName: string;
+        side: string;
+        status: string;
+        type: string;
+    }[];
+    matches: {
+        number: number;
+        match_id: string | null;
+        result: string | null;
+        startedAt: number;
+        concludedAt: number | null;
+    }[];
+    createdAt: number;
+    updatedAt: number;
 };
 
 export type DisputeRow = {
@@ -315,24 +375,214 @@ export async function unbanUserAction(userId: string): Promise<void> {
 
 export async function getScrimmagesForAdminAction(statusFilter?: string): Promise<ScrimmageRow[]> {
     await requireRole();
-    const filter = statusFilter
-        ? { status: statusFilter }
-        : { status: { $nin: ["COMPLETED", "CANCELLED"] } };
+    const filter = statusFilter ? { status: statusFilter } : {};
     const docs = await db
         .collection("scrimmages")
         .find(filter)
         .sort({ createdAt: -1 })
         .limit(100)
         .toArray();
+
+    const hostIds = [...new Set(
+        docs.map((d: any) => d.host).filter((id: any): id is string => typeof id === "string" && ObjectId.isValid(id))
+    )];
+    const userDocs = hostIds.length > 0
+        ? await db.collection("user").find({ _id: { $in: hostIds.map((id) => new ObjectId(id)) } }).toArray()
+        : [];
+    const userMap = new Map<string, string>(userDocs.map((u: any) => [u._id.toString(), u.name ?? "Unknown"]));
+
+    const rawOrgIds = docs.flatMap((d: any) => [d.hostOrg, d.opponentOrg])
+        .filter((id: any): id is string => typeof id === "string" && ObjectId.isValid(id));
+    const uniqueOrgIds = [...new Set(rawOrgIds)];
+    const orgDocs = uniqueOrgIds.length > 0
+        ? await db.collection("organizations").find({ _id: { $in: uniqueOrgIds.map((id) => new ObjectId(id)) } }).toArray()
+        : [];
+    const orgMap = new Map<string, string>(orgDocs.map((o: any) => [o._id.toString(), o.name ?? "Unknown"]));
+
     return docs.map((d: any) => ({
         _id: d._id.toString(),
-        host: d.host ?? "",
         status: d.status ?? "",
         wagerAmount: d.wagerAmount ?? 0,
         region: d.region ?? "",
         bestOf: d.bestOf ?? "",
+        isPrivate: d.isPrivate ?? false,
+        scheduledAt: d.scheduledAt ?? null,
+        hostId: d.host ?? "",
+        hostName: userMap.get(d.host) ?? "Unknown",
+        hostOrgName: d.hostOrg ? (orgMap.get(d.hostOrg) ?? null) : null,
+        opponentOrgName: d.opponentOrg ? (orgMap.get(d.opponentOrg) ?? null) : null,
         createdAt: d.createdAt ?? 0,
     }));
+}
+
+export async function getScrimDetailAction(scrimmageId: string): Promise<ScrimDetailRow | null> {
+    await requireRole();
+    if (!ObjectId.isValid(scrimmageId)) return null;
+    const doc = await db.collection("scrimmages").findOne({ _id: new ObjectId(scrimmageId) });
+    if (!doc) return null;
+    const d = doc as any;
+
+    const rawUserIds = [
+        d.host,
+        d.hostTeam?.leader,
+        ...(d.hostTeam?.members ?? []),
+        d.opponentTeam?.leader,
+        ...(d.opponentTeam?.members ?? []),
+        ...(d.invitations ?? []).map((i: any) => i.user),
+    ].filter((id): id is string => typeof id === "string" && ObjectId.isValid(id));
+    const uniqueUserIds = [...new Set(rawUserIds)];
+    const userDocs = uniqueUserIds.length > 0
+        ? await db.collection("user").find({ _id: { $in: uniqueUserIds.map((id) => new ObjectId(id)) } }).toArray()
+        : [];
+    const userMap = new Map<string, string>(userDocs.map((u: any) => [u._id.toString(), u.name ?? u._id.toString()]));
+
+    const rawOrgIds = [d.hostOrg, d.opponentOrg].filter(
+        (id): id is string => typeof id === "string" && ObjectId.isValid(id)
+    );
+    const orgDocs = rawOrgIds.length > 0
+        ? await db.collection("organizations").find({ _id: { $in: [...new Set(rawOrgIds)].map((id) => new ObjectId(id)) } }).toArray()
+        : [];
+    const orgMap = new Map<string, string>(orgDocs.map((o: any) => [o._id.toString(), o.name ?? o._id.toString()]));
+
+    const resolveUser = (id?: string | null) => (id ? (userMap.get(id) ?? null) : null);
+    const resolveOrg  = (id?: string | null) => (id ? (orgMap.get(id) ?? null) : null);
+    const mapMembers  = (ids: string[]) => ids.map((id) => ({ _id: id, name: userMap.get(id) ?? id.slice(-8) }));
+
+    return {
+        _id: d._id.toString(),
+        status: d.status ?? "",
+        region: d.region ?? "",
+        bestOf: d.bestOf ?? "ONE",
+        isPrivate: d.isPrivate ?? false,
+        wagerAmount: d.wagerAmount ?? 0,
+        note: d.note ?? null,
+        partyCode: d.partyCode ?? null,
+        readyHost: d.readyHost ?? false,
+        readyOpponent: d.readyOpponent ?? false,
+        result: d.result ?? null,
+        scheduledAt: d.scheduledAt ?? null,
+        hostId: d.host ?? "",
+        hostName: resolveUser(d.host) ?? "Unknown",
+        hostOrgId: d.hostOrg ?? null,
+        hostOrgName: resolveOrg(d.hostOrg),
+        hostTeamName: d.hostTeam?.name ?? null,
+        hostTeamLeaderId: d.hostTeam?.leader ?? null,
+        hostTeamLeaderName: resolveUser(d.hostTeam?.leader),
+        hostTeamMembers: mapMembers(d.hostTeam?.members ?? []),
+        opponentOrgId: d.opponentOrg ?? null,
+        opponentOrgName: resolveOrg(d.opponentOrg),
+        opponentTeamName: d.opponentTeam?.name ?? null,
+        opponentTeamLeaderId: d.opponentTeam?.leader ?? null,
+        opponentTeamLeaderName: resolveUser(d.opponentTeam?.leader),
+        opponentTeamMembers: mapMembers(d.opponentTeam?.members ?? []),
+        invitations: (d.invitations ?? []).map((inv: any) => ({
+            userId: inv.user ?? "",
+            userName: resolveUser(inv.user) ?? "Unknown",
+            side: inv.side ?? "",
+            status: inv.status ?? "PENDING",
+            type: inv.type ?? "",
+        })),
+        matches: (d.matches ?? []).map((m: any) => ({
+            number: m.number ?? 0,
+            match_id: m.match_id ?? null,
+            result: m.result ?? null,
+            startedAt: m.startedAt ?? 0,
+            concludedAt: m.concludedAt ?? null,
+        })),
+        createdAt: d.createdAt ?? 0,
+        updatedAt: d.updatedAt ?? 0,
+    };
+}
+
+export async function adminUpdateScrimmageAction(
+    scrimmageId: string,
+    changes: { status?: string; scheduledAt?: number | null },
+): Promise<void> {
+    await requireRole([Role.Admin, Role.Moderator]);
+    if (!ObjectId.isValid(scrimmageId)) throw new Error("Invalid scrimmage ID");
+
+    const existing = await db.collection("scrimmages").findOne({ _id: new ObjectId(scrimmageId) });
+    if (!existing) throw new Error("Scrimmage not found");
+    const d = existing as any;
+
+    const update: Record<string, unknown> = { updatedAt: Date.now() };
+    if (changes.status !== undefined) update.status = changes.status;
+    if ("scheduledAt" in changes) update.scheduledAt = changes.scheduledAt ?? null;
+
+    await db.collection("scrimmages").updateOne({ _id: new ObjectId(scrimmageId) }, { $set: update });
+
+    const timeChanged = "scheduledAt" in changes && changes.scheduledAt !== (d.scheduledAt ?? null);
+    if (timeChanged && changes.scheduledAt) {
+        const allMemberIds = [
+            d.host,
+            d.hostTeam?.leader,
+            ...(d.hostTeam?.members ?? []),
+            d.opponentTeam?.leader,
+            ...(d.opponentTeam?.members ?? []),
+        ].filter((id): id is string => typeof id === "string" && id.length > 0);
+        const uniqueIds = [...new Set(allMemberIds)];
+
+        const newTimeStr = new Date(changes.scheduledAt).toLocaleString("en-US", {
+            month: "short", day: "numeric", year: "numeric",
+            hour: "numeric", minute: "2-digit", timeZoneName: "short",
+        });
+
+        await Promise.allSettled(
+            uniqueIds.map((recipientId) =>
+                sendNotificationAction({
+                    recipientId,
+                    type: NotificationType.General,
+                    title: "Scrimmage Rescheduled",
+                    description: `Your scrimmage has been rescheduled to ${newTimeStr} by an admin.`,
+                    senderName: "Admin",
+                    link: `/scrims/${scrimmageId}`,
+                })
+            )
+        );
+
+        const durationMs = BESTOF_DURATION_MS[d.bestOf ?? "ONE"] ?? BESTOF_DURATION_MS.ONE;
+        const startTime = new Date(changes.scheduledAt);
+        const endTime = new Date(changes.scheduledAt + durationMs);
+        await Promise.allSettled(uniqueIds.map((uid) => updateGoogleCalendarEvent(uid, scrimmageId, startTime, endTime)));
+    }
+
+    revalidatePath("/admin/scrimmages");
+}
+
+async function updateGoogleCalendarEvent(
+    userId: string,
+    scrimmageId: string,
+    startTime: Date,
+    endTime: Date,
+): Promise<void> {
+    if (!ObjectId.isValid(userId)) return;
+    const account = (await db.collection("account").findOne({
+        userId: new ObjectId(userId),
+        providerId: "google",
+    })) as { accessToken: string; refreshToken: string } | null;
+    if (!account) return;
+    try {
+        const oauth = getGoogleClient(account.accessToken, account.refreshToken);
+        const cal = google.calendar({ version: "v3", auth: oauth });
+        await cal.events.patch({
+            calendarId: "primary",
+            eventId: scrimmageId,
+            requestBody: {
+                start: { dateTime: startTime.toISOString(), timeZone: "UTC" },
+                end: { dateTime: endTime.toISOString(), timeZone: "UTC" },
+            },
+        });
+    } catch {
+        // Event may not exist for this user (no Google connected, or not a scheduled scrim)
+    }
+}
+
+export async function adminPurgeAllScrimmagesAction(): Promise<void> {
+    if (process.env.NODE_ENV !== "development") throw new Error("Only available in development mode");
+    await requireRole([Role.Admin]);
+    await db.collection("scrimmages").deleteMany({});
+    await db.collection("user").updateMany({}, { $set: { scrimmages: [] } });
+    revalidatePath("/admin/scrimmages");
 }
 
 export async function adminCancelScrimmageAction(

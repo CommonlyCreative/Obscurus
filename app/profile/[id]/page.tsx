@@ -48,7 +48,6 @@ const UserProfileRoute = graphql(`
         }
     }
     getScrimmageInvitations(user_id: $user_id) {
-        _id
         side
         scrimmage {
             _id
@@ -61,6 +60,7 @@ const UserProfileRoute = graphql(`
             }
             scheduledAt
         }
+        type
     }
     getUser(user_id: $user_id) {
         _id
@@ -220,7 +220,7 @@ async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
                         />
                     </div>
                     <div className="lg:col-span-3">
-                        <MatchHistoryPanel scrimmages={profile.scrimmages} profileUserId={profile._id} />
+                        <MatchHistoryPanel scrimmages={profile.scrimmages.filter(scrim => !!scrim.opponentTeam)} profileUserId={profile._id} />
                     </div>
                 </div>
             </div>

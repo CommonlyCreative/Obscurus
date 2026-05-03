@@ -103,7 +103,16 @@ export function TeamPanel({
 
     async function handleCreateTeam() {
         if (!user) return;
-        const statlocker = await getStatlockerRankAction(convertSteam64toSteam32(user.steam?.id ?? ""))
+        if (!user.steam?.id) {
+            return toast.error("Steam Required", {
+                description: "Please connect your steam to create a team",
+                action: {
+                    label: "Connect",
+                    onClick: () => router.push(`${process.env.NEXT_PUBLIC_SOCKET_URL}/auth/steam`)
+                }
+            })
+        }
+        const statlocker = await getStatlockerRankAction(convertSteam64toSteam32(user.steam.id))
         createSocketTeam({ name: user.name, mmr: statlocker.averageMatchRankNumber, status: "JOINED" }, user.name + "'s Team");
     }
 

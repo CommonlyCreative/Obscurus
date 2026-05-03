@@ -8,6 +8,8 @@ import { APILimit } from "@/lib/actions/deadlockapi";
 import { db } from "@/lib/database/mongo";
 import { ArrayElement } from "@/lib/utils";
 import { DeadlockMatch } from "@/lib/types/deadlock/match";
+import { RespondToScrimInviteMutation } from "@/lib/database/shared-graphs";
+import { deleteGoogleScrimmageEvent } from "../create/actions";
 
 const ReadyUpMutation = graphql(`
     mutation ReadyUp($scrimmage_id: String!, $side: MatchSide!) {
@@ -80,8 +82,8 @@ const LeaveScrimmageM = graphql(`
 `);
 
 const DeclineChallengeMutation = graphql(`
-    mutation DeclineChallenge($scrimmage_id: String!, $org_id: String!) {
-        declineScrimmageChallenge(scrimmage_id: $scrimmage_id, org_id: $org_id) { _id status }
+    mutation DeclineChallenge($scrimmage_id: String!, $user_id: String!) {
+        declineScrimmageChallenge(scrimmage_id: $scrimmage_id, user_id: $user_id) { _id status }
     }
 `);
 
@@ -92,8 +94,8 @@ const JoinScrimmageM = graphql(`
 `);
 
 const AcceptChallengeMutation = graphql(`
-    mutation AcceptChallenge($scrimmage_id: String!, $org_id: String!) {
-        acceptScrimmageChallenge(scrimmage_id: $scrimmage_id, org_id: $org_id) { _id status }
+    mutation AcceptChallenge($scrimmage_id: String!, $user_id: String!) {
+        acceptScrimmageChallenge(scrimmage_id: $scrimmage_id, user_id: $user_id) { _id status }
     }
 `);
 
@@ -101,14 +103,6 @@ const SetOpponentRosterM = graphql(`
     mutation SetOpponentRoster($input: SetOpponentRosterInput!) {
         setOpponentRoster(input: $input) { _id status }
     }
-`);
-
-const RespondToInvitationMutation = graphql(`
-  mutation ProfileRespondToScrimInvite($invitation_id: String!, $status: InvitationStatus!) {
-    respondToInvitation(input: { invitation_id: $invitation_id, status: $status }) {
-      status
-    }
-  }
 `);
 
 const GetMatchUserBySteamId = graphql(`
@@ -200,50 +194,48 @@ export async function joinScrimmageAction(scrimmageId: string, team: string[]) {
     return joinScrimmage;
 }
 
-export async function leaveScrimmageAction(scrimmageId: string, orgId: string) {
+export async function leaveScrimmageAction(scrimmageId: string) {
     const { leaveScrimmage } = await grafbase.request(LeaveScrimmageM, {
         scrimmage_id: scrimmageId,
     });
     return leaveScrimmage;
 }
 
-type Invitation = ArrayElement<NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["invitations"]> | null;
-
-export async function declineChallengeAction(scrimmageId: string, orgId: string, invitation?: Invitation) {
+export async function declineChallengeAction(scrimmageId: string, user_id: string) {
     const { declineScrimmageChallenge } = await grafbase.request(DeclineChallengeMutation, {
         scrimmage_id: scrimmageId,
-        org_id: orgId,
+        user_id,
     });
-    if (invitation)
-        respondToInvitationAction(invitation._id, InvitationStatus.Declined)
     return declineScrimmageChallenge;
 }
 
-export async function respondToInvitationAction(invitationId: string, status: InvitationStatus, team?: LiveTeam | null) {
-    const { respondToInvitation } = await grafbase.request(RespondToInvitationMutation, {
-        invitation_id: invitationId,
+export async function respondToInvitationAction(scrimmage_id: string, user_id: string, status: InvitationStatus) {
+    const { respondToInvitation } = await grafbase.request(RespondToScrimInviteMutation, {
+        user_id: user_id,
         status,
-        team: team
+        scrimmage_id
     });
     return respondToInvitation;
 }
 
-export async function acceptChallengeAction(scrimmageId: string, orgId: string) {
+export async function acceptChallengeAction(scrimmageId: string, user_id: string) {
     const { acceptScrimmageChallenge } = await grafbase.request(AcceptChallengeMutation, {
         scrimmage_id: scrimmageId,
-        org_id: orgId,
+        user_id,
     });
     return acceptScrimmageChallenge;
 }
 
-export async function acceptChallengeWithRosterAction(scrimmageId: string, orgId: string, team: string[], invitation?: Invitation) {
-    await grafbase.request(AcceptChallengeMutation, { scrimmage_id: scrimmageId, org_id: orgId });
-    const { setOpponentRoster } = await grafbase.request(SetOpponentRosterM, {
-        input: { scrimmage_id: scrimmageId, org_id: orgId, team },
+export async function acceptChallengeWithRosterAction(scrimmageId: string, user_id: string, team: string[],) {
+    await grafbase.request(AcceptChallengeMutation, { scrimmage_id: scrimmageId, user_id });
+    return await setOpponentRoster(scrimmageId, user_id, team);
+}
+
+export async function setOpponentRoster(scrimmageId: string, user_id: string, team: string[]) {
+    const { setOpponentRoster: roster } = await grafbase.request(SetOpponentRosterM, {
+        input: { scrimmage_id: scrimmageId, leader_id: user_id, team },
     });
-    if (invitation)
-        respondToInvitationAction(invitation._id, InvitationStatus.Declined)
-    return setOpponentRoster;
+    return roster
 }
 
 export async function getMatchUserBySteamId(steam_id: string) {

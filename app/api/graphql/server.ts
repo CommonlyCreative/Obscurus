@@ -292,8 +292,8 @@ export type MutationAcceptOrgInviteArgs = {
 
 
 export type MutationAcceptScrimmageChallengeArgs = {
-  org_id: Scalars['String']['input'];
   scrimmage_id: Scalars['String']['input'];
+  user_id: Scalars['String']['input'];
 };
 
 
@@ -393,8 +393,8 @@ export type MutationDeclineOrgInviteArgs = {
 
 
 export type MutationDeclineScrimmageChallengeArgs = {
-  org_id: Scalars['String']['input'];
   scrimmage_id: Scalars['String']['input'];
+  user_id: Scalars['String']['input'];
 };
 
 
@@ -892,9 +892,9 @@ export enum RefundReason {
 }
 
 export type RespondToInvitationInput = {
-  invitation_id: Scalars['String']['input'];
+  scrimmage_id: Scalars['String']['input'];
   status: InvitationStatus;
-  team?: InputMaybe<TeamInput>;
+  user_id: Scalars['String']['input'];
 };
 
 export enum Role {
@@ -932,8 +932,8 @@ export type Scrimmage = {
 
 export type ScrimmageInvitation = {
   __typename?: 'ScrimmageInvitation';
-  _id: Scalars['ID']['output'];
   createdAt: Scalars['Timestamp']['output'];
+  organization?: Maybe<Organization>;
   respondedAt?: Maybe<Scalars['Timestamp']['output']>;
   scrimmage: Scrimmage;
   side: MatchSide;
@@ -944,6 +944,7 @@ export type ScrimmageInvitation = {
 };
 
 export type ScrimmageInvitationInput = {
+  organization_id?: InputMaybe<Scalars['String']['input']>;
   side: MatchSide;
   type: InvitationType;
   user_id: Scalars['String']['input'];
@@ -978,7 +979,7 @@ export type SendNotificationInput = {
 };
 
 export type SetOpponentRosterInput = {
-  org_id?: InputMaybe<Scalars['String']['input']>;
+  leader_id: Scalars['String']['input'];
   scrimmage_id: Scalars['String']['input'];
   team: Array<Scalars['String']['input']>;
 };
@@ -1574,7 +1575,7 @@ export type MatchResolvers<ContextType = Context, ParentType extends ResolversPa
 export type MutationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Mutation'] = ResolversParentTypes['Mutation']> = ResolversObject<{
   _empty?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   acceptOrgInvite?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationAcceptOrgInviteArgs, 'org_id' | 'user_id'>>;
-  acceptScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationAcceptScrimmageChallengeArgs, 'org_id' | 'scrimmage_id'>>;
+  acceptScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationAcceptScrimmageChallengeArgs, 'scrimmage_id' | 'user_id'>>;
   addAvailabilityBlock?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddAvailabilityBlockArgs, 'block' | 'org_id'>>;
   addCorePlayer?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddCorePlayerArgs, 'org_id' | 'user_id'>>;
   addException?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationAddExceptionArgs, 'excpetion' | 'org_id'>>;
@@ -1592,7 +1593,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCreateSubstituteRequestArgs, 'input'>>;
   createUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreateUserArgs, 'input'>>;
   declineOrgInvite?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDeclineOrgInviteArgs, 'org_id' | 'user_id'>>;
-  declineScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationDeclineScrimmageChallengeArgs, 'org_id' | 'scrimmage_id'>>;
+  declineScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationDeclineScrimmageChallengeArgs, 'scrimmage_id' | 'user_id'>>;
   deleteOrganization?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDeleteOrganizationArgs, 'org_id'>>;
   dismissNotification?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDismissNotificationArgs, 'notification_id' | 'user_id'>>;
   endScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationEndScrimmageArgs, 'scrimmage_id'>>;
@@ -1742,8 +1743,8 @@ export type ScrimmageResolvers<ContextType = Context, ParentType extends Resolve
 }>;
 
 export type ScrimmageInvitationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['ScrimmageInvitation'] = ResolversParentTypes['ScrimmageInvitation']> = ResolversObject<{
-  _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
+  organization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType>;
   respondedAt?: Resolver<Maybe<ResolversTypes['Timestamp']>, ParentType, ContextType>;
   scrimmage?: Resolver<ResolversTypes['Scrimmage'], ParentType, ContextType>;
   side?: Resolver<ResolversTypes['MatchSide'], ParentType, ContextType>;

@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { getSearchData } from "./actions";
 import { SearchResults } from "@/components/shared/SearchResults";
-import { getHeroes } from "@/lib/actions/deadlockapi";
 import type { SearchOrgData, SearchPlayerData } from "@/components/shared/SearchResults";
 import { SearchPageQuery } from "../api/graphql/types/graphql";
+import { getHeroes } from "../scrims/[id]/cache";
 
 export default function SearchPage() {
     return (

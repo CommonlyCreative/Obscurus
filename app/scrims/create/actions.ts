@@ -3,7 +3,7 @@
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
 import { BestOf, InvitationType, MatchSide } from "@/app/api/graphql/types/graphql";
-import { checkForOverlap, getGoogleClient } from "@/lib/google";
+import { getGoogleClient } from "@/lib/google";
 import { calendar_v3, google } from "googleapis";
 import { db } from "@/lib/database/mongo";
 import { auth } from "@/lib/database/auth";
@@ -34,7 +34,6 @@ export interface CreateScrimPayload {
     wagerAmount: number;
     host_id: string;
     hostOrgId: string | null;
-    orgAffiliated: boolean;
     roster: string[];
     targetLeaderId: string | null;
     opponentOrg_id: string | null;
@@ -63,8 +62,7 @@ export async function createScrimmageAction(payload: CreateScrimPayload) {
             scheduledAt: payload.scheduledAt ?? undefined,
             wagerAmount: payload.wagerAmount,
             bestOf: payload.bestOf,
-            opponentOrg_id: payload.opponentOrg_id,
-            invitations: payload.targetLeaderId ? [{ user_id: payload.targetLeaderId, side: MatchSide.Opponent, type: InvitationType.LeaderInvite }] : [],
+            invitations: payload.targetLeaderId ? [{ user_id: payload.targetLeaderId, organization_id: payload.opponentOrg_id, side: MatchSide.Opponent, type: InvitationType.LeaderInvite }] : [],
         },
     });
 
@@ -123,17 +121,75 @@ export async function getCalendarInfo(): Promise<CalendarResult> {
     }
 }
 
-
-export async function insertCalendarInfo({ summary, startTime, endTime, timeZone }: { summary: string, startTime: string, endTime: string, timeZone: string }): Promise<{ success: boolean, response: string } | undefined> {
+export async function checkGoogleAvailability({ startTime, endTime }: { startTime: string, endTime: string }) {
     const session = await auth.api.getSession({ headers: await headers() });
 
     if (!session?.user) return;
-    const account = await db.collection("account").findOne({ userId: new ObjectId(session.user.id), providerId: "google" }) as WithId<{ accessToken: string, refreshToken: string }> | null
+    const calendar = await getGoogleCalendar(session.user.id);
+
+    if (!calendar) return;
+
+    return await calendarOverlapCheck(calendar, { startTime, endTime });
+}
+
+export async function calendarOverlapCheck(calendar: calendar_v3.Calendar, { startTime, endTime }: { startTime: string, endTime: string }) {
+    const response = await calendar.events.list({
+        calendarId: "primary",
+        timeMin: startTime,   // only fetch events within the exact window
+        timeMax: endTime,
+        singleEvents: true,       // expand recurring events so none are missed
+        orderBy: 'startTime',
+    })
+
+    const existingEvents = response.data.items ?? [];
+
+    const conflictingEvents = existingEvents.filter(event => {
+        const existingStart = event.start?.dateTime ?? event.start?.date;
+        const existingEnd = event.end?.dateTime ?? event.end?.date;
+
+        return doesOverlap(existingStart, existingEnd, startTime, endTime);
+    });
+    return {
+        hasConflict: conflictingEvents.length > 0,
+        conflictingEvents: conflictingEvents.map(e => ({
+            id: e.id,
+            title: e.summary,
+            start: e.start?.dateTime ?? e.start?.date,
+            end: e.end?.dateTime ?? e.end?.date,
+        })),
+    };
+}
+
+function doesOverlap(existingStart: string | undefined | null, existingEnd: string | undefined | null, newStart: string, newEnd: string) {
+    if (!existingStart || !existingEnd) return false;
+    return new Date(existingStart) < new Date(newEnd) &&
+        new Date(existingEnd) > new Date(newStart);
+}
+
+async function getGoogleCalendar(user_id: string) {
+    const account = await db.collection("account").findOne({ userId: new ObjectId(user_id), providerId: "google" }) as WithId<{ accessToken: string, refreshToken: string }> | null
     if (!account) return;
     const googleAuth = getGoogleClient(account.accessToken, account.refreshToken);
-    const calendar = google.calendar({ version: 'v3', auth: googleAuth });
+    return google.calendar({ version: 'v3', auth: googleAuth });
+}
 
-    const overlap = await checkForOverlap(calendar, { startTime, endTime });
+async function getGoogleCalendars() {
+    const accounts = await db.collection("account").find({ providerId: "google" }).toArray() as (WithId<{ accessToken: string, refreshToken: string }>)[]
+    return accounts.map(account => {
+        const googleAuth = getGoogleClient(account.accessToken, account.refreshToken);
+        return google.calendar({ version: 'v3', auth: googleAuth });
+    })
+}
+
+export async function insertCalendarInfo({ id, summary, startTime, endTime, timeZone }: { id: string, summary: string, startTime: string, endTime: string, timeZone: string }): Promise<{ success: boolean, response: string } | undefined> {
+    const session = await auth.api.getSession({ headers: await headers() });
+
+    if (!session?.user) return;
+    const calendar = await getGoogleCalendar(session.user.id);
+
+    if (!calendar) return;
+
+    const overlap = await calendarOverlapCheck(calendar, { startTime, endTime });
 
     if (overlap.hasConflict) {
         const errorMessage = overlap.conflictingEvents.map(event => event.title).join(", ");
@@ -141,6 +197,7 @@ export async function insertCalendarInfo({ summary, startTime, endTime, timeZone
     }
 
     const event = {
+        id,
         summary,               // Event title
         start: {
             dateTime: startTime,    // e.g. "2026-05-01T10:00:00-05:00"
@@ -157,12 +214,13 @@ export async function insertCalendarInfo({ summary, startTime, endTime, timeZone
                 { method: 'popup', minutes: 10 },
             ],
         },
-    };
+    } as calendar_v3.Schema$Event;
 
     const response = await calendar.events.insert({
         calendarId: 'primary',
         requestBody: event,
     });
+
 
     if (response.status !== 200) {
         return { success: false, response: "An unknown error occured" }
@@ -170,16 +228,26 @@ export async function insertCalendarInfo({ summary, startTime, endTime, timeZone
     return { success: true, response: "Event was successfully created." };
 }
 
-export async function createGoogleScrimmageEvent(scheduledAt: Date, teamName: string, bestOf: BestOf) {
-    const endTime = new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf])
+export async function createGoogleScrimmageEvent(id: string, teamName: string, scheduledAt: Date, projectedEndTime: Date) {
     const response = await insertCalendarInfo({
+        id,
         summary: "Scrimmage vs. " + teamName,
         startTime: scheduledAt.toISOString(),
-        endTime: endTime.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        endTime: projectedEndTime.toISOString(),
+        timeZone: "UTC",
     })
 
     if (response && !response.success) {
         throw Error(response.response)
     }
+}
+
+export async function deleteGoogleScrimmageEvent(scrimmage_id: string) {
+    const calendars = await getGoogleCalendars()
+
+    await Promise.allSettled(calendars.map(calendar => {
+        try {
+            calendar.events.delete({ eventId: scrimmage_id, calendarId: "primary" })
+        } catch (err) {}
+    }))
 }

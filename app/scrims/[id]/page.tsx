@@ -66,10 +66,28 @@ const GetScrimmageQuery = graphql(`
                 members { _id name steam { id } }
             }
             invitations {
-                _id
                 user { _id name }
                 side
                 status
+                type
+                organization {
+                    _id
+                    name
+                    members {
+                        user {
+                            _id
+                            name
+                            stats {
+                                mmr
+                            }
+                        }
+                        status
+                    }
+                    coreTeam {
+                        _id
+                        name
+                    }
+                }
             }
         }
     }
@@ -97,18 +115,6 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
 
     if (!scrim) notFound();
 
-    const steamIds = scrim.opponentOrg?.members.map(member => convertSteam64toSteam32(member.user.steam?.id ?? "")) ?? [];
-    const stats = await getStatlockerRanksAction(steamIds);
-
-    const opponentOrg = scrim.opponentOrg;
-    if (opponentOrg) {
-        opponentOrg.members = opponentOrg.members
-            .map(member => ({
-                ...member,
-                mmr: stats.find(stat => stat.accountId.toString() === convertSteam64toSteam32(member.user.steam?.id ?? ""))?.estimatedRankNumber ?? 0
-            } as ArrayElement<NonNullable<Scrim["opponentOrg"]>["members"]> & { mmr: number }));
-    }
-
     const viewerOrgId = viewerData?.getUser?.organization?._id ?? null;
     const isHost = user?.id === scrim.host._id;
     const hostMemberIds = scrim.hostTeam?.members.map((m) => m._id) ?? [];
@@ -131,7 +137,6 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
             isHostMember={isHostMember}
             isOpponentMember={isOpponentMember}
             hostOrgId={scrim.hostOrg?._id ?? null}
-            opponentOrg={opponentOrg as ScrimDetailProps["opponentOrg"] ?? null}
             isOpponentOrgManager={isOpponentOrgManager}
             viewerOrgId={viewerOrgId}
         />

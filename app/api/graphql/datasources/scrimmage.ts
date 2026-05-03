@@ -4,8 +4,11 @@ import {
     CreateScrimmageInput, UpdateScrimmageInput, MatchSide,
     Match,
     InvitationStatus,
+    InvitationType,
+    TeamInput,
 } from "../server";
 import { ArrayElement, convertNullsToUndefined } from "@/lib/utils";
+import { deleteGoogleScrimmageEvent } from "@/app/scrims/create/actions";
 
 // ─── DB types ────────────────────────────────────────────────────────────────
 
@@ -21,9 +24,9 @@ export type DBScrimmage = Omit<Scrimmage, "opponentTeam" | "opponentOrg" | "host
     opponentOrg?: string,
     hostOrg?: string,
     host: string,
-    invitations: (Omit<ArrayElement<Scrimmage["invitations"]>, "user" | "_id" | "scrimmage"> & {
-        _id: ObjectId;
+    invitations: (Omit<ArrayElement<Scrimmage["invitations"]>, "user" | "organization" | "scrimmage"> & {
         user: string;
+        organization?: string;
     })[]
 }
 
@@ -130,9 +133,9 @@ export class ScrimmageDataSource {
         );
     }
 
-    async respondToInvitation(invitationId: string, status: InvitationStatus): Promise<WithId<DBScrimmage> | null> {
+    async respondToInvitation(scrimmage_id: string, user_id: string, status: InvitationStatus): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.collection.findOneAndUpdate(
-            { 'invitations._id': new ObjectId(invitationId) },
+            { _id: new ObjectId(scrimmage_id), "invitations.user": user_id },
             { $set: { 'invitations.$.status': status, 'invitations.$.respondedAt': now(), updatedAt: now() } }
         );
         return scrim;
@@ -160,11 +163,11 @@ export class ScrimmageDataSource {
             readyOpponent: false,
             matches: [],
             invitations: clean.invitations?.map(obj => ({
-                _id: new ObjectId(),
                 status: InvitationStatus.Pending,
                 type: obj.type,
                 side: obj.side,
                 user: obj.user_id,
+                organization: obj.organization_id,
                 createdAt: now(),
             })) ?? [],
             createdAt: now(),
@@ -234,39 +237,62 @@ export class ScrimmageDataSource {
 
     async acceptScrimmageChallenge(
         scrimmageId: string,
-        orgId: string
+        user_id: string
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Pending) throw new Error("No pending challenge to accept");
-        if (scrim.opponentOrg !== orgId) throw new Error("Your org is not the target of this challenge");
+        const invitation = scrim.invitations.find(inv => inv.user === user_id&&inv.type === InvitationType.LeaderInvite)
+
+        if (!invitation)throw new Error("Only leaders can accept scrimmage challenges");
+
+        invitation.status = InvitationStatus.Accepted;
 
         const nextStatus = scrim.scheduledAt
             ? ScrimmageStatus.Scheduling
             : ScrimmageStatus.Ready;
 
+            //TODO
+
         return this.patch(scrimmageId, {
-            opponentOrg: orgId,
+            opponentOrg: invitation.organization,
             status: nextStatus,
+            invitations: scrim.invitations,
         });
     }
 
     async declineScrimmageChallenge(
         scrimmageId: string,
-        orgId: string
+        user_id: string
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Pending) throw new Error("No pending challenge to decline");
-        if (scrim.opponentOrg !== orgId) throw new Error("Your org is not the target of this challenge");
+        const invitation = scrim.invitations.find(inv => inv.user === user_id&&inv.type === InvitationType.LeaderInvite)
 
-        return this.patch(scrimmageId, { status: ScrimmageStatus.Cancelled });
+        if (!invitation)throw new Error("Only leaders can decline scrimmage challenges");
+
+        invitation.status = InvitationStatus.Declined
+
+        let status = ScrimmageStatus.Cancelled;
+
+        for (const invite of scrim.invitations){
+            if (invite.type === InvitationType.LeaderInvite&&invite.status === InvitationStatus.Pending) {
+                status = scrim.status;
+            }
+        }
+
+        if (status === ScrimmageStatus.Cancelled)
+            await deleteGoogleScrimmageEvent(scrimmageId)
+
+        return this.patch(scrimmageId, { status, invitations: scrim.invitations });
     }
 
     // ── Roster management ─────────────────────────────────────────────────────
 
     async setOpponentRoster(
         scrimmageId: string,
+        leader_id: string,
         team: string[]
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
@@ -280,7 +306,7 @@ export class ScrimmageDataSource {
             : scrim.status;
 
         return this.patch(scrimmageId, {
-            opponentTeam: { leader: team[0], members: team },
+            opponentTeam: { leader: leader_id, members: team },
             status: nextStatus,
         });
     }
@@ -481,6 +507,7 @@ export class ScrimmageDataSource {
     }
 
     async cancelScrimmage(scrimmageId: string): Promise<WithId<DBScrimmage> | null> {
+        await deleteGoogleScrimmageEvent(scrimmageId)
         return this.patch(scrimmageId, { status: ScrimmageStatus.Cancelled });
     }
 
