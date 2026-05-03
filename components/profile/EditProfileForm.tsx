@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { Hero, Rank, getRankByMMR, calculateMMR, convertSteam32toSteam64, convertSteam64toSteam32 } from "@/lib/deadlock";
 import { EditProfilePageQuery, OrgRole } from "@/app/api/graphql/types/graphql";
-import { ArrayElement, cn } from "@/lib/utils";
+import { ArrayElement, cn, formatTimeAgo } from "@/lib/utils";
 import ranks from "@/lib/types/deadlock/ranks.json"
 import {
     updateProfileAction,
@@ -90,6 +90,7 @@ interface Props {
     initialBio: string;
     org: OrgProp | null;
     isManager: boolean;
+    disconnectGoogleOnMount?: boolean;
 }
 
 function SectionCard({ title, subtitle, children }: {
@@ -118,8 +119,10 @@ export function EditProfileForm({
     users,
     stats,
     isManager,
+    disconnectGoogleOnMount = false,
 }: Props) {
     const router = useRouter();
+    const { data: session } = authClient.useSession();
     const [isPending, startTransition] = useTransition();
     const [profileError, setProfileError] = useState<string | null>(null);
     const [profileSuccess, setProfileSuccess] = useState(false);
@@ -162,6 +165,8 @@ export function EditProfileForm({
     const [linkedAccounts, setLinkedAccounts] = useState<Array<{ providerId: string }>>([]);
     const [accountsLoading, setAccountsLoading] = useState(true);
     const [googleDisconnectError, setGoogleDisconnectError] = useState<string | null>(null);
+    const [showReauthDialog, setShowReauthDialog] = useState(false);
+    const autoDisconnectAttempted = useRef(false);
 
     function toggleHero(id: number) {
         setSelectedHeroes((prev) => {
@@ -312,11 +317,24 @@ export function EditProfileForm({
         setGoogleDisconnectError(null);
         const { error } = await authClient.unlinkAccount({ providerId: "google" });
         if (error) {
-            setGoogleDisconnectError(error.message ?? "Failed to disconnect Google.");
+            if (error.status === 403) {
+                setShowReauthDialog(true);
+            } else {
+                setGoogleDisconnectError(error.message ?? "Failed to disconnect Google.");
+            }
         } else {
             setLinkedAccounts(prev => prev.filter(a => a.providerId !== "google"));
         }
     }
+
+    useEffect(() => {
+        if (!disconnectGoogleOnMount || accountsLoading || autoDisconnectAttempted.current) return;
+        autoDisconnectAttempted.current = true;
+        handleGoogleDisconnect().then(() => {
+            router.replace(window.location.pathname);
+        });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [disconnectGoogleOnMount, accountsLoading]);
 
     const profileSections = (
         <>
@@ -400,6 +418,35 @@ export function EditProfileForm({
                             </button>
                         )
                     )}
+
+                    <Dialog open={showReauthDialog} onOpenChange={setShowReauthDialog}>
+                        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+                            <DialogHeader>
+                                <DialogTitle>Identity Verification Required</DialogTitle>
+                                <DialogDescription>
+                                    For your security, please re-verify your identity to disconnect this account.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="sm:justify-start">
+                                <Button
+                                    onClick={() => {
+                                        setShowReauthDialog(false);
+                                        authClient.linkSocial({
+                                            provider: "google",
+                                            callbackURL: `${window.location.pathname}?disconnect_google=1`,
+                                        });
+                                    }}
+                                    className="gap-2"
+                                >
+                                    <GoogleIcon size={14} />
+                                    Continue with Google
+                                </Button>
+                                <DialogClose asChild>
+                                    <Button type="button" variant="ghost">Cancel</Button>
+                                </DialogClose>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
             </section>
             {/* Rank */}

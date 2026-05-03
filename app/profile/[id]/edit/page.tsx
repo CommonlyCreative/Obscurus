@@ -48,13 +48,23 @@ const EditProfilePageQuery = graphql(`
   }
 `);
 
-export default function EditProfilePage({ params }: { params: Promise<{ id: string }> }) {
+export default function EditProfilePage({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ disconnect_google?: string }>;
+}) {
     const headersPromise = headers();
 
     return (
         <main className="flex-1">
             <Suspense fallback={<EditProfileSkeleton />}>
-                <EditProfileData headersPromise={headersPromise} paramsPromise={params} />
+                <EditProfileData
+                    headersPromise={headersPromise}
+                    paramsPromise={params}
+                    searchParamsPromise={searchParams}
+                />
             </Suspense>
         </main>
     );
@@ -63,11 +73,13 @@ export default function EditProfilePage({ params }: { params: Promise<{ id: stri
 async function EditProfileData({
     headersPromise,
     paramsPromise,
+    searchParamsPromise,
 }: {
     headersPromise: ReturnType<typeof headers>;
     paramsPromise: Promise<{ id: string }>;
+    searchParamsPromise: Promise<{ disconnect_google?: string }>;
 }) {
-    const [h, { id: profileId }] = await Promise.all([headersPromise, paramsPromise]);
+    const [h, { id: profileId }, sp] = await Promise.all([headersPromise, paramsPromise, searchParamsPromise]);
     const session = await auth.api.getSession({ headers: h });
     if (!session) redirect("/");
 
@@ -127,6 +139,7 @@ async function EditProfileData({
                 initialHeroes={profile.heroes}
                 initialBio={profile.bio ?? ""}
                 heroes={heroes.filter(hero => !hero.in_development && !hero.disabled).sort((a, b) => a.name.localeCompare(b.name))}
+                disconnectGoogleOnMount={sp.disconnect_google === "1"}
                 org={org ? {
                     _id: org._id,
                     name: org.name,
