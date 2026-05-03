@@ -327,6 +327,20 @@ export function EditProfileForm({
         }
     }
 
+    function handleReauthAndDisconnect() {
+        setShowReauthDialog(false);
+        authClient.signOut({
+            fetchOptions: {
+                onSuccess: () => {
+                    authClient.signIn.social({
+                        provider: "discord",
+                        callbackURL: `${window.location.pathname}?disconnect_google=1`,
+                    });
+                },
+            },
+        });
+    }
+
     useEffect(() => {
         if (!disconnectGoogleOnMount || accountsLoading || autoDisconnectAttempted.current) return;
         autoDisconnectAttempted.current = true;
@@ -418,37 +432,28 @@ export function EditProfileForm({
                             </button>
                         )
                     )}
-
-                    <Dialog open={showReauthDialog} onOpenChange={setShowReauthDialog}>
-                        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-                            <DialogHeader>
-                                <DialogTitle>Identity Verification Required</DialogTitle>
-                                <DialogDescription>
-                                    For your security, please re-verify your identity to disconnect this account.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter className="sm:justify-start">
-                                <Button
-                                    onClick={() => {
-                                        setShowReauthDialog(false);
-                                        authClient.linkSocial({
-                                            provider: "google",
-                                            callbackURL: `${window.location.pathname}?disconnect_google=1`,
-                                        });
-                                    }}
-                                    className="gap-2"
-                                >
-                                    <GoogleIcon size={14} />
-                                    Continue with Google
-                                </Button>
-                                <DialogClose asChild>
-                                    <Button type="button" variant="ghost">Cancel</Button>
-                                </DialogClose>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
                 </div>
             </section>
+
+            <Dialog open={showReauthDialog} onOpenChange={setShowReauthDialog}>
+                <DialogContent className="sm:max-w-md" showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>Identity Verification Required</DialogTitle>
+                        <DialogDescription>
+                            For your security, please re-verify your identity to disconnect this account.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="sm:justify-start">
+                        <Button onClick={handleReauthAndDisconnect}>
+                            Continue with Discord
+                        </Button>
+                        <DialogClose asChild>
+                            <Button type="button" variant="ghost">Cancel</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Rank */}
             <SectionCard
                 title="Rank"

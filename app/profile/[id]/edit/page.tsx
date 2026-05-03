@@ -139,7 +139,6 @@ async function EditProfileData({
                 initialHeroes={profile.heroes}
                 initialBio={profile.bio ?? ""}
                 heroes={heroes.filter(hero => !hero.in_development && !hero.disabled).sort((a, b) => a.name.localeCompare(b.name))}
-                disconnectGoogleOnMount={sp.disconnect_google === "1"}
                 org={org ? {
                     _id: org._id,
                     name: org.name,
@@ -148,6 +147,7 @@ async function EditProfileData({
                     coreTeamIds,
                 } : null}
                 isManager={isManager}
+                disconnectGoogleOnMount={sp.disconnect_google === "1"}
             />
         </div>
     );

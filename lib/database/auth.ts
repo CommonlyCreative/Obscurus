@@ -48,7 +48,7 @@ const options = {
                     }
                 }
             },
-        }
+        },
     },
 
     user: {
