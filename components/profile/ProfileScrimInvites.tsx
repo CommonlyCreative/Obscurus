@@ -8,7 +8,7 @@ import {
     acceptScrimInviteAction,
     declineScrimInviteAction,
 } from "@/app/profile/[id]/actions";
-import { InvitationType, MatchSide, UserProfileQuery } from "@/app/api/graphql/types/graphql";
+import { InvitationType, MatchSide, ScrimmageStatus, UserProfileQuery } from "@/app/api/graphql/types/graphql";
 import { declineChallengeAction } from "@/app/scrims/[id]/actions";
 
 type ScrimInvite = ArrayElement<UserProfileQuery["getScrimmageInvitations"]>;
@@ -97,7 +97,7 @@ export function ProfileScrimInvites({
 
     return (
         <div className="mb-6 space-y-2">
-            {invites.map(invite => (
+            {invites.filter(invite => invite.scrimmage.status === ScrimmageStatus.Pending).map(invite => (
                 <ScrimInviteCard key={invite.scrimmage._id} invite={invite} profileId={profileId} />
             ))}
         </div>

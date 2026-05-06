@@ -41,27 +41,28 @@ const GetScrimmageQuery = graphql(`
                 startedAt
                 concludedAt
             }
-            host { _id name steam { id } }
+            host { _id name stats { mmr } }
             hostOrg { _id name }
             hostTeam {
-                leader { _id name steam { id } }
-                members { _id name steam { id } }
+                leader { _id name stats { mmr } }
+                members { _id name stats { mmr } }
             }
             opponentOrg {
                 _id
                 name
-                coreTeam { _id name steam { id } }
+                coreTeam { _id name stats { mmr } }
                 members {
                     orgRole
                     user {
                         _id
                         name
-                        steam { id }
+                        stats { mmr }
                     }
                     status
                 }
             }
             opponentTeam {
+                name
                 leader { _id name steam { id } }
                 members { _id name steam { id } }
             }

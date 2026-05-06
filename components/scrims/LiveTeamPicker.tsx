@@ -4,7 +4,7 @@ import { ArrayElement, cn } from "@/lib/utils";
 import { useLiveTeams } from "@/hooks/useLiveTeams";
 import type { LiveTeam } from "@/lib/socket/teams";
 import { CreateScrimPageQuery } from "@/app/api/graphql/types/graphql";
-import { OrgProp } from "./CreateScrimForm";
+import { OrgProp, ScrimmageTarget } from "./CreateScrimForm";
 import { useTeamSocket } from "@/hooks/useTeamSocket";
 
 export function LiveTeamPicker({
@@ -21,8 +21,8 @@ export function LiveTeamPicker({
     orgAffiliated: boolean,
     org: OrgProp | null,
     userId: string,
-    selected: string | null;
-    onSelect: (leaderId: string) => void;
+    selected: ScrimmageTarget | null;
+    onSelect: (leaderId: ScrimmageTarget | null) => void;
 }) {
     // const { teams: allTeams, loading, refresh } = useLiveTeams();
     const { teams: allTeams, loading} = useTeamSocket("all")
@@ -97,12 +97,12 @@ export function LiveTeamPicker({
     );
 }
 
-function LiveTeamCard({ team, selected, onSelect }: { team: LiveTeam, selected: string | null; onSelect: (leaderId: string) => void; }) {
-    const isSelected = selected === team.leaderId;
+function LiveTeamCard({ team, selected, onSelect }: { team: LiveTeam, selected: ScrimmageTarget | null; onSelect: (leaderId: ScrimmageTarget | null) => void; }) {
+    const isSelected = selected?.user_id === team.leaderId && !selected.org;
     return (
         <button
             type="button"
-            onClick={() => onSelect(team.leaderId)}
+            onClick={() => onSelect(!isSelected ? { user_id: team.leaderId, org: null } : null)}
             className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors",
                 isSelected
@@ -148,13 +148,13 @@ function LiveTeamCard({ team, selected, onSelect }: { team: LiveTeam, selected: 
     )
 }
 
-function OrgCard({ team, selected, onSelect }: { team: ArrayElement<NonNullable<CreateScrimPageQuery["getOrganizations"]>>, selected: string | null; onSelect: (leaderId: string) => void; }) {
-    const isSelected = selected === team.owner._id;
+function OrgCard({ team, selected, onSelect }: { team: ArrayElement<NonNullable<CreateScrimPageQuery["getOrganizations"]>>, selected: ScrimmageTarget | null; onSelect: (leaderId: ScrimmageTarget | null) => void; }) {
+    const isSelected = selected?.user_id === team.owner._id && selected?.org?.id === team._id;
     const letter = team.name.charAt(0).toUpperCase();
     return (
         <button
             type="button"
-            onClick={() => onSelect(team.owner._id)}
+            onClick={() => onSelect(!isSelected ? { user_id: team.owner._id, org: { id: team._id, name: team.name } } : null)}
             className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-lg border text-left transition-colors",
                 isSelected

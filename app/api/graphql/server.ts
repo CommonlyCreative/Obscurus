@@ -980,6 +980,7 @@ export type SendNotificationInput = {
 
 export type SetOpponentRosterInput = {
   leader_id: Scalars['String']['input'];
+  name?: InputMaybe<Scalars['String']['input']>;
   scrimmage_id: Scalars['String']['input'];
   team: Array<Scalars['String']['input']>;
 };

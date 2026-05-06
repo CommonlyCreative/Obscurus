@@ -62,6 +62,8 @@ export const ENDTIME_CONVERSION = {
     [BestOf.Unlimited]: 4 * 60 * 60 * 1000,
 }
 
+export type ScrimmageTarget = { user_id: string, org: { id: string, name: string } | null };
+
 export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
@@ -80,7 +82,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
     const [bestOf, setBestOf] = useState<BestOf>(BestOf.One);
 
     // Private: target + wager
-    const [targetLeaderId, setTargetLeaderId] = useState<string | null>(null);
+    const [target, setTarget] = useState<ScrimmageTarget | null>(null);
     const [wagerAmount, setWagerAmount] = useState(0);
 
     // Org manager options
@@ -105,8 +107,22 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
         : (liveTeam?.members.map((m) => m.userId) ?? []);
 
     const rosterFull = rosterIds.length === 6;
-    const canSubmit = rosterFull && (!isPrivate || targetLeaderId !== null) &&
+    const canSubmit = rosterFull && (!isPrivate || target !== null) &&
         !(scheduled && !scheduledDate);
+
+    function resetForm() {
+        setIsPrivate(false);
+        setNote("");
+        setRegion("NA");
+        setBestOf(BestOf.One);
+        setTarget(null);
+        setWagerAmount(0);
+        setOrgAffiliated(false);
+        setScheduled(false);
+        setScheduledDate("");
+        setRoster(initialRoster);
+        setError(null);
+    }
 
     function handleSubmit() {
         if (!canSubmit || isPending) return;
@@ -118,7 +134,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     ? new Date(scheduledDate)
                     : null;
                 const endTime = scheduledAt ? new Date(scheduledAt.getTime() + ENDTIME_CONVERSION[bestOf]) : null
-                let opponentOrg = await getOrganization(targetLeaderId ?? undefined);
+                let opponentOrg = target?.org
 
                 if (scheduledAt && endTime && opponentOrg) {
                     const overlap = await checkGoogleAvailability({ startTime: scheduledAt.toISOString(), endTime: endTime.toISOString() })
@@ -137,8 +153,8 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     wagerAmount,
                     hostOrgId: orgAffiliated && org ? org._id : null,
                     roster: rosterIds,
-                    targetLeaderId,
-                    opponentOrg_id: opponentOrg?._id ?? null,
+                    targetLeaderId: target?.user_id ?? null,
+                    opponentOrg_id: opponentOrg?.id ?? null,
                     scheduledAt: scheduledAt?.getTime() ?? null,
                     bestOf,
                 });
@@ -152,11 +168,12 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                 }
 
                 if (result) {
-                    if (targetLeaderId) {
+                    if (target) {
                         const teamName = orgAffiliated && org ? org.name : liveTeam?.name ?? "Unknown Team";
-                        const notification = await notifyScrimmageInvitation(targetLeaderId, teamName)
+                        const notification = await notifyScrimmageInvitation(target.user_id, teamName)
                         socket.emit("notify", notification)
                     }
+                    resetForm();
                     router.push(`/scrims/${result._id}`);
                 } else {
                     setError("Failed to create scrimmage. Please try again.");
@@ -178,7 +195,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                         <button
                             key={String(priv)}
                             type="button"
-                            onClick={() => { setIsPrivate(priv); setTargetLeaderId(null); }}
+                            onClick={() => { setIsPrivate(priv); setTarget(null); }}
                             className={cn(
                                 "py-3 px-4 rounded-lg border text-left transition-colors",
                                 isPrivate === priv
@@ -393,7 +410,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                         title="Target Team"
                         subtitle="Select the online team you want to challenge."
                     >
-                        <LiveTeamPicker orgAffiliated={orgAffiliated} org={org} orgs={orgs} isManager={isManager} userId={userId} selected={targetLeaderId} onSelect={setTargetLeaderId} />
+                        <LiveTeamPicker orgAffiliated={orgAffiliated} org={org} orgs={orgs} isManager={isManager} userId={userId} selected={target} onSelect={setTarget} />
                     </SectionCard>
                 )
             }
@@ -470,7 +487,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     <span className="text-xs text-muted">
                         {!rosterFull
                             ? "Roster needs 6 players"
-                            : isPrivate && !targetLeaderId
+                            : isPrivate && !target
                                 ? "Select a target team"
                                 : "Set a scheduled time"}
                     </span>

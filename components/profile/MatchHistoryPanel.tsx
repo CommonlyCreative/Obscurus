@@ -46,7 +46,7 @@ export function MatchHistoryPanel({ scrimmages, profileUserId }: { scrimmages: N
                             const otherTeam = side === MatchSide.Opponent ? match.hostTeam : match.opponentTeam;
                             const org = side === MatchSide.Host ? match.hostOrg : match.opponentOrg
                             const { label, classes } = resultBadge(match.result, side);
-                            if (!otherTeam) return;
+                            const otherTeamName = org?.name ?? otherTeam?.name ?? "Not Determined"
                             return (
                                 <Link key={match._id} href={`/scrims/${match._id}`} className={cn("flex items-center gap-4 px-5 py-3.5 transition-colors",
                                     match.status === ScrimmageStatus.Active ? "bg-success/5 border border-success/10 hover:bg-success/20" : "hover:bg-surface-2"
@@ -62,7 +62,7 @@ export function MatchHistoryPanel({ scrimmages, profileUserId }: { scrimmages: N
                                     )}
                                     <div className="flex-1 min-w-0">
                                         <div className="text-sm font-semibold text-foreground truncate">
-                                            vs {otherTeam.name ?? otherTeam.leader.name + "'s Team"}
+                                            vs {otherTeamName}
                                         </div>
                                         <div className="text-xs text-muted mt-0.5">{formatTimeAgo(new Date(match.createdAt))}</div>
                                     </div>

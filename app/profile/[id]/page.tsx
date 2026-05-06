@@ -59,6 +59,7 @@ const UserProfileRoute = graphql(`
                 slug
             }
             scheduledAt
+            status
         }
         type
     }
@@ -208,7 +209,7 @@ async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
                         profileId={profile._id}
                     />
                 )}
-                <ProfileStats _id={profile._id} scrimmages={profile.scrimmages.filter(scrim => scrim.status !== ScrimmageStatus.Active)} />
+                <ProfileStats _id={profile._id} scrimmages={profile.scrimmages.filter(scrim => ![ScrimmageStatus.Active, ScrimmageStatus.Cancelled].includes(scrim.status))} />
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
                     <div className="lg:col-span-2">
                         <TeamPanel

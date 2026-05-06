@@ -83,7 +83,7 @@ const BEST_OF_LABEL: Record<BestOf, string> = {
     [BestOf.One]: "Bo1",
     [BestOf.Three]: "Bo3",
     [BestOf.Five]: "Bo5",
-    [BestOf.Unlimited]: "Open",
+    [BestOf.Unlimited]: "Unlimited",
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -237,9 +237,13 @@ export function ScrimDetail({
     const showReadyCheck = !isFinished && userId && showReadyState;
     const showJoin = status === ScrimmageStatus.Open && userId && !isHost && !isHostMember;
     const showInvitation = myInvitation && !isFinished && !isActive && myInvitation.status === InvitationStatus.Pending;
-    const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!myOrg&& !!userId; //TODO;
+    const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!userId; //TODO;
     const isOrgChallenge = !!myInvitation && !!myInvitation.organization;
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
+    const roster = isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
+    const rankAvg = scrim.hostTeam.members.reduce((acc, memb) => {
+        return acc += 0;
+    }, 0)
 
     function handleRespondToInvite(newStatus: InvitationStatus) {
         if (!myInvitation) return;
@@ -377,7 +381,10 @@ export function ScrimDetail({
                 <div className="grid grid-cols-[1fr_auto_1fr]">
                     {/* Host */}
                     <div className="px-6 py-5">
-                        <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">Host</div>
+                        <div className="flex gap-2">
+                            <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">Host</div>
+                            {}
+                        </div>
                         <div className="text-2xl flex items-center gap-3 font-black text-foreground leading-tight">
                             {scrim.hostOrg?.name ?? scrim.host.name}
                             {scrim.hostOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
@@ -407,7 +414,7 @@ export function ScrimDetail({
                             {scrim.opponentOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
                                 ORG
                             </span>}
-                            {scrim.opponentOrg?.name ?? scrim.opponentTeam?.leader.name ?? <p className="italic text-muted">TBD</p>}
+                            {scrim.opponentOrg?.name ?? scrim.opponentTeam?.name ?? <p className="italic text-muted">TBD</p>}
                         </div>
                         {showReadyState && scrim.opponentTeam && (
                             <div className={cn("text-xs font-semibold mt-2 flex items-center justify-end gap-1.5", readyOpponent ? "text-success" : "text-muted")}>
@@ -596,7 +603,7 @@ export function ScrimDetail({
                         </div>
                     )}
 
-                    {/* My Invitation */}
+                    {/* User's Invitation */}
                     {showInvitation && !showAcceptChallenge && (
                         <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
                             <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Your Invitation</h3>
@@ -701,12 +708,12 @@ export function ScrimDetail({
                             <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Accept Challenge</h2>
                             {isOrgChallenge && <p className="text-sm text-dimmed mt-1">Select your 6-player roster to accept this scrimmage.</p>}
                         </div>
-                        <span className={cn("text-sm font-bold", selectedTeamIds.size === 6 ? "text-success" : "text-muted")}>
-                            {selectedTeamIds.size}/6
+                        <span className={cn("text-sm font-bold", roster.length === 6 ? "text-success" : "text-muted")}>
+                            {roster.length}/6
                         </span>
                     </div>
 
-                    {isOrgChallenge &&
+                    {isOrgChallenge ? (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {activeOrgMembers.length === 0 ? (
                                 <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
@@ -737,12 +744,35 @@ export function ScrimDetail({
                                     </button>
                                 );
                             })}
-                        </div>}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {!liveTeam || liveTeam.members.length === 0 ? (
+                                <p className="text-xs text-muted italic col-span-3">No active team members found.</p>
+                            ) : liveTeam.members.map(member => {
+                                const stats = getRankByMMR(member.mmr);
+                                return (
+                                    <div
+                                        key={member.userId}
+                                        className="flex items-center gap-2.5 px-3 py-2.5 rounded border border-edge text-foreground"
+                                    >
+                                        <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                            {member.name.charAt(0)}
+                                        </div>
+                                        <span className="font-medium flex-1 text-xs truncate">{member.name}</span>
+                                        {stats && (
+                                            <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
-                    <div className="flex items-center gap-3 pt-1 border-t border-edge">
+                    <div className="flex items-center gap-3">
                         <Button
-                            onClick={() => handleAction(acceptChallengeWithRosterAction(scrim._id, userId, isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds)))}
-                            disabled={pending || (isOrgChallenge && selectedTeamIds.size < 6) || (!isOrgChallenge && liveTeamIds.length < 6)}
+                            onClick={() => handleAction(acceptChallengeWithRosterAction(scrim._id, userId, roster, isOrgChallenge ? myOrg?.name : liveTeam?.name))}
+                            disabled={pending || roster.length < 6}
                         >
                             Accept Challenge
                         </Button>

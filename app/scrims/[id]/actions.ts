@@ -226,14 +226,14 @@ export async function acceptChallengeAction(scrimmageId: string, user_id: string
     return acceptScrimmageChallenge;
 }
 
-export async function acceptChallengeWithRosterAction(scrimmageId: string, user_id: string, team: string[],) {
+export async function acceptChallengeWithRosterAction(scrimmageId: string, user_id: string, team: string[], teamName: string | undefined) {
     await grafbase.request(AcceptChallengeMutation, { scrimmage_id: scrimmageId, user_id });
-    return await setOpponentRoster(scrimmageId, user_id, team);
+    return await setOpponentRoster(scrimmageId, user_id, team, teamName);
 }
 
-export async function setOpponentRoster(scrimmageId: string, user_id: string, team: string[]) {
+export async function setOpponentRoster(scrimmageId: string, user_id: string, team: string[], teamName: string | undefined) {
     const { setOpponentRoster: roster } = await grafbase.request(SetOpponentRosterM, {
-        input: { scrimmage_id: scrimmageId, leader_id: user_id, team },
+        input: { scrimmage_id: scrimmageId, leader_id: user_id, team, name: teamName },
     });
     return roster
 }

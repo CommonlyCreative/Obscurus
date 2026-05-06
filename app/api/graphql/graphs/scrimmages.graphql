@@ -203,6 +203,7 @@ input UpdateScrimmageInput {
 input SetOpponentRosterInput {
     scrimmage_id: String!
     leader_id: String!
+    name: String
     team: [String!]!             # Exactly 6 user IDs
 }
 

@@ -58,11 +58,6 @@ export function ProfileHeader({
                                 </span>
                             )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                            {/* <RoleTag role={profile.role} /> */}
-
-
-                        </div>
                         <p className="text-sm text-dimmed leading-relaxed max-w-lg">{profile.bio}</p>
                     </div>
                     {profile.stats?.mmr && rank && <Tooltip>

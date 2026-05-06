@@ -72,6 +72,7 @@ export function Navbar() {
         { href: "/", label: "Home", exact: true },
         { href: "/scrims", label: "Scrims", exact: false },
         { href: "/search", label: "Search", exact: false },
+        { href: "/feedback", label: "Feedback", exact: false },
     ];
 
     const isActive = (href: string, exact: boolean) =>
@@ -148,7 +149,6 @@ export function Navbar() {
                                                 {/* User info + team status */}
                                                 <div className="px-4 py-3 border-b border-edge">
                                                     <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
-                                                    <p className="text-xs text-muted truncate mt-0.5">{user.email}</p>
                                                     <div className="flex items-center gap-2 mt-2.5">
                                                         <div className="flex items-center gap-0.5">
                                                             {Array.from({ length: 6 }).map((_, i) => (
@@ -184,6 +184,14 @@ export function Navbar() {
                                                             Create Match
                                                         </Link>
                                                     )}
+
+                                                    <Link
+                                                        href="/feedback"
+                                                        onClick={() => setAvatarOpen(false)}
+                                                        className="flex items-center gap-2.5 px-4 py-2 text-sm text-dimmed hover:text-foreground hover:bg-surface-2 transition-colors"
+                                                    >
+                                                        Submit Feedback
+                                                    </Link>
 
                                                     {isAdmin && (
                                                         <Link

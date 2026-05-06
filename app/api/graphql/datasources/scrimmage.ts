@@ -70,10 +70,6 @@ function computeSeriesResult(matches: Match[], bestOf: BestOf): ScrimmageResult 
     const needed = seriesWinsNeeded(bestOf);
     if (hostWins >= needed) return ScrimmageResult.HostWin;
     if (opponentWins >= needed) return ScrimmageResult.OpponentWin;
-    if (bestOf === BestOf.Unlimited) {
-        if (hostWins > opponentWins) return ScrimmageResult.HostWin;
-        if (hostWins < opponentWins) return ScrimmageResult.OpponentWin;
-    }
 
     // All matches played without a winner → draw
     const totalGames = bestOf === BestOf.Unlimited ? Infinity
@@ -225,7 +221,7 @@ export class ScrimmageDataSource {
         const update = await this.patch(scrimmageId, {
             opponentOrg: undefined,
             opponentTeam: undefined,
-            status: ScrimmageStatus.Open,
+            status: scrim.isPrivate ? ScrimmageStatus.Pending : ScrimmageStatus.Open,
             readyHost: false,
             readyOpponent: false,
         });
@@ -293,7 +289,8 @@ export class ScrimmageDataSource {
     async setOpponentRoster(
         scrimmageId: string,
         leader_id: string,
-        team: string[]
+        team: string[],
+        name?: string,
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
@@ -306,7 +303,7 @@ export class ScrimmageDataSource {
             : scrim.status;
 
         return this.patch(scrimmageId, {
-            opponentTeam: { leader: leader_id, members: team },
+            opponentTeam: { leader: leader_id, members: team, name },
             status: nextStatus,
         });
     }

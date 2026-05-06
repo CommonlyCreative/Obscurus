@@ -461,8 +461,8 @@ export const resolvers: Resolvers = {
             return scrimmages.declineScrimmageChallenge(scrimmage_id, user_id) as any;
         },
         setOpponentRoster: async (_, { input }, { dataSources: { scrimmages } }) => {
-            const { scrimmage_id, leader_id, team } = input;
-            return scrimmages.setOpponentRoster(scrimmage_id, leader_id, team) as any;
+            const { scrimmage_id, leader_id, team, name } = input;
+            return scrimmages.setOpponentRoster(scrimmage_id, leader_id, team, name ?? undefined) as any;
         },
         updateRosterSlot: async (_, { input }, { dataSources: { scrimmages } }) => {
             const { scrimmage_id, side, remove_id, replace_id } = input;
