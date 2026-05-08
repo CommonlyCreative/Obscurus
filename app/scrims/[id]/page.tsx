@@ -44,6 +44,7 @@ const GetScrimmageQuery = graphql(`
             host { _id name stats { mmr } }
             hostOrg { _id name }
             hostTeam {
+                name
                 leader { _id name stats { mmr } }
                 members { _id name stats { mmr } }
             }
@@ -63,8 +64,8 @@ const GetScrimmageQuery = graphql(`
             }
             opponentTeam {
                 name
-                leader { _id name steam { id } }
-                members { _id name steam { id } }
+                leader { _id name stats { mmr } }
+                members { _id name stats { mmr } }
             }
             invitations {
                 user { _id name }

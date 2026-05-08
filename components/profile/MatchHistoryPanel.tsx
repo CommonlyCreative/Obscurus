@@ -44,7 +44,7 @@ export function MatchHistoryPanel({ scrimmages, profileUserId }: { scrimmages: N
                         {scrimmages.sort((a,b) => b.createdAt - a.createdAt).slice(0, maxMatchView).map((match) => {
                             const side = match.opponentTeam?.members.some(member => member._id === profileUserId) ? MatchSide.Opponent : MatchSide.Host
                             const otherTeam = side === MatchSide.Opponent ? match.hostTeam : match.opponentTeam;
-                            const org = side === MatchSide.Host ? match.hostOrg : match.opponentOrg
+                            const org = side === MatchSide.Opponent ? match.hostOrg : match.opponentOrg
                             const { label, classes } = resultBadge(match.result, side);
                             const otherTeamName = org?.name ?? otherTeam?.name ?? "Not Determined"
                             return (
