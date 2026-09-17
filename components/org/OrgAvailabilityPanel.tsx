@@ -7,8 +7,8 @@ import { Day } from "@/app/api/graphql/types/graphql";
 import { updateAvailabilityBlocksAction } from "@/app/org/[slug]/actions";
 
 const DAY_ORDER: Day[] = [
-    Day.Monday, Day.Tuesday, Day.Wednesday, Day.Thursday,
-    Day.Friday, Day.Saturday, Day.Sunday,
+    Day.Sunday, Day.Monday, Day.Tuesday, Day.Wednesday,
+    Day.Thursday, Day.Friday, Day.Saturday,
 ];
 
 const DAY_LABEL: Record<Day, string> = {

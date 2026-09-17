@@ -271,11 +271,11 @@ export function EditProfileForm({
                     </div>
                 ) : (
                     <p className="text-xs text-muted">
-                        Connect your
-                        <Link href="" className="text-foreground font-medium">
+                        Connect your&nbsp;
+                        <Link href={`${process.env.NEXT_PUBLIC_SOCKET_URL}/auth/steam`} className="text-foreground font-medium">
                             Steam
                         </Link>
-                        to pull your rank
+                        &nbsp;to pull your rank
                     </p>
                 )}
             </SectionCard>

@@ -46,7 +46,7 @@ export function ProfileHeader({
                         <div className="flex items-center gap-2 mb-1">
                             <h1 className="text-2xl font-black text-foreground">{profile.name}</h1>
                             {heroes.length > 0 && (
-                                <span className="flex flex-wrap gap-2 text-xs text-muted font-medium px-2 py-0.5 bg-surface-2 rounded-full border border-edge">
+                                <span className="flex flex-wrap max-w-lg gap-2 text-xs text-muted font-medium px-2 py-0.5 bg-surface-2 rounded-full border border-edge">
                                     {heroes.map((hero, x) => (
                                         <Tooltip key={x}>
                                             <TooltipTrigger><img className="w-6 h-6" src={hero.images.minimap_image_webp} /></TooltipTrigger>

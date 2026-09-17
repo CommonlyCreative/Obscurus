@@ -74,6 +74,7 @@ const UserProfileRoute = graphql(`
             mmr
         }
         region
+        heroes
         bio
         steam {
             id
@@ -189,7 +190,7 @@ async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
         <>
             <ProfileHeader
                 profile={profile}
-                heroes={heroes.filter(hero => (user?.heroes ?? []).includes(hero.id))}
+                heroes={heroes.filter(hero => (profile.heroes ?? []).includes(hero.id))}
                 editHref={user?.id === profile._id ? `/profile/${profile._id}/edit` : undefined}
             />
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

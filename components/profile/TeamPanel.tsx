@@ -60,7 +60,7 @@ export function TeamPanel({
     const { teams, loading } = useTeamSocket([profileUserId]);
     const { teams: allLiveTeams } = useTeamSocket("all");
     const team = findTeam(teams, profileUserId);
-    const [tab, setTab] = useState<Tab>("online");
+    const [tab, setTab] = useState<Tab>("organization");
     const [inviteOpen, setInviteOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserEntry | null>(null);
     const [blockedUser, setBlockedUser] = useState<string | null>(null);
@@ -177,7 +177,7 @@ export function TeamPanel({
             <div className="space-y-3">
                 {/* Tab strip */}
                 <div className="flex gap-1 bg-surface-2 rounded-lg p-1">
-                    {(["online", "organization"] as Tab[]).map((t) => (
+                    {(["organization", "online"] as Tab[]).map((t) => (
                         <button
                             key={t}
                             onClick={() => setTab(t)}

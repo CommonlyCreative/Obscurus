@@ -66,7 +66,7 @@ const BEST_OF_LABEL: Record<string, string> = {
     UNLIMITED: "Open",
 };
 
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function formatTime(ms: number): string {
     return new Date(ms).toLocaleTimeString("en-US", {
@@ -266,12 +266,12 @@ export function OrgScrimCalendar({ scrims }: { scrims: OrgCalendarScrim[] }) {
     const lastOfMonth = new Date(year, month + 1, 0);
 
     const firstDow = firstOfMonth.getDay();
-    const leadingDays = firstDow === 0 ? 6 : firstDow - 1;
+    const leadingDays = firstDow;
     const gridStart = new Date(firstOfMonth);
     gridStart.setDate(firstOfMonth.getDate() - leadingDays);
 
     const lastDow = lastOfMonth.getDay();
-    const trailingDays = lastDow === 0 ? 0 : 7 - lastDow;
+    const trailingDays = 6 - lastDow;
     const gridEnd = new Date(lastOfMonth);
     gridEnd.setDate(lastOfMonth.getDate() + trailingDays);
 
