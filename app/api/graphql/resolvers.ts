@@ -566,8 +566,12 @@ export const resolvers: Resolvers = {
 
             return member as any as OrganizationMember;
         },
-        acceptOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations } }) => {
-            return organizations.acceptOrgInvite(org_id, user_id) as any as Promise<OrganizationMember | null>;
+        acceptOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations, users } }) => {
+            const member = await organizations.acceptOrgInvite(org_id, user_id);
+            if (member && !await users.addOrganizationToUser(user_id, org_id)) {
+                throw new Error(`Unable to link accepted member to organization: ${org_id}`);
+            }
+            return member as any as OrganizationMember | null;
         },
         declineOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations, users } }) => {
             const declined = await organizations.declineOrgInvite(org_id, user_id);

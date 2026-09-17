@@ -31,6 +31,7 @@ export function OrgRosterPanel({
     const coreIds = new Set(org.coreTeam.map(c => c._id));
     const active = org.members.filter(m => m.status === OrgMemberStatus.Active);
     const invited = org.members.filter(m => m.status === OrgMemberStatus.Invited);
+    const isMember = org.members.some(m => m.user._id === currentUserId)
 
     const sorted = [...active].sort(
         (a, b) => memberRank(a, org.owner._id, coreIds) - memberRank(b, org.owner._id, coreIds),
@@ -149,7 +150,7 @@ export function OrgRosterPanel({
                     })}
                 </div>
 
-                {invited.length > 0 && (
+                {isMember && invited.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-edge">
                         <p className="text-[10px] text-muted uppercase tracking-widest mb-2">
                             Pending Invites
