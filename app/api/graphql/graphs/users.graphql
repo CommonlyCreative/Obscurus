@@ -6,9 +6,9 @@
 
 type User {
     _id: ID!                    # Better Auth user ID — the single source of identity
-    online: Boolean!
+    online: Boolean!            # Live presence (heartbeat + expiry via the socket server) — not stored
     name: String!
-    verified: Boolean!          # Maps to emailVerified on the Better Auth user document
+    verified: Boolean!          # Better Auth's emailVerified, stored as "verified" (see lib/database/auth.ts user.fields)
     role: Role!                 # Platform-level role
     heroes: [Int!]!          # Hero IDs from lib/deadlock.ts (e.g. "infernus", "yamato")
     bio: String                 # Player bio / about text
@@ -75,9 +75,9 @@ input UserInput {
 }
 
 input UpdateUserInput {
-    online: Boolean
     verified: Boolean
     role: Role
+    name: String
     mmr: Int
     heroes: [Int!]
     bio: String
@@ -113,6 +113,5 @@ extend type Query {
 extend type Mutation {
     createUser(input: UserInput!): User
     updateUser(user_id: String!, input: UpdateUserInput!): User
-    setOnlineStatus(user_id: String!, online: Boolean!): User
     createCustomer(input: CustomerInput!): Customer
 }

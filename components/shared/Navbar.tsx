@@ -62,6 +62,16 @@ export function Navbar() {
         });
     }, [user]);
 
+    // Keeps the socket server's presence heartbeat alive while this tab is open —
+    // see the "presence:heartbeat" handler and PRESENCE_TIMEOUT_MS in socket.mts.
+    useEffect(() => {
+        if (!user) return;
+        const interval = setInterval(() => {
+            socket.emit("presence:heartbeat", user.id);
+        }, 20_000);
+        return () => clearInterval(interval);
+    }, [user]);
+
     async function handleSignOut() {
         await authClient.signOut();
         setAvatarOpen(false);

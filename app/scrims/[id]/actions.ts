@@ -4,12 +4,10 @@ import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "../../api/graphql/types";
 import { GetScrimmageDetailQuery, InvitationStatus, MatchResult, MatchSide } from "@/app/api/graphql/types/graphql";
 import { LiveTeam } from "@/lib/socket/teams";
-import { APILimit } from "@/lib/actions/deadlockapi";
-import { db } from "@/lib/database/mongo";
 import { ArrayElement } from "@/lib/utils";
-import { DeadlockMatch } from "@/lib/types/deadlock/match";
 import { RespondToScrimInviteMutation } from "@/lib/database/shared-graphs";
 import { deleteGoogleScrimmageEvent } from "../create/actions";
+import { fetchMatchMetadata, MatchLookupResult } from "@/lib/actions/deadlockMatchCache";
 
 const ReadyUpMutation = graphql(`
     mutation ReadyUp($scrimmage_id: String!, $side: MatchSide!) {
@@ -245,35 +243,7 @@ export async function getMatchUserBySteamId(steam_id: string) {
     return getUserBySteamId;
 }
 
-const collection = db.collection<APILimit>("deadlock-api-limits");
-
-export async function getAPILimit(match_id: string) {
-    return JSON.parse(JSON.stringify(await collection.findOne({ match_id }))) as APILimit
-}
-
-export async function deleteLimit(match_id: string) {
-    await collection.deleteOne({ match_id })
-}
-
-export async function updateLimit({ match_id, limit, remaining, reset_in, last_request, past_request }: APILimit) {
-    const update = await collection.updateOne({ match_id }, { $set: { match_id, limit, remaining, reset_in, last_request, past_request } }, { upsert: true })
-    return update.modifiedCount > 0;
-}
-
-export async function getMatch(match_id: string): Promise<DeadlockMatch> {
-    await deleteLimit(match_id);
-    const res = await fetch(`https://api.deadlock-api.com/v1/matches/${match_id}/metadata`, {
-        next: { revalidate: 3600 },
-    });
-    const body = await res.json();
-    if (body.error) {
-        if (!body.error.quota) return { errorMessage: `An unknown error occurred when retrieving match ${match_id}: ${JSON.stringify(body.error)}` } as any;
-        const { quota: { limit }, remaining } = body.error as { quota: { limit: number; period: number }; remaining: number; request: number };
-        const last_request = Date.now();
-        const past_request = ([] as number[]).filter(r => r < last_request - 60 * 60 * 1000);
-        const reset_in = ((past_request.at(0) ?? last_request) + 60 * 60 * 1000) - last_request;
-        await updateLimit({ match_id, limit, remaining, reset_in, last_request, past_request });
-    }
-    return body;
+export async function getMatch(match_id: string): Promise<MatchLookupResult> {
+    return fetchMatchMetadata(match_id);
 }
 

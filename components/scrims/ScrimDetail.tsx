@@ -165,6 +165,28 @@ export function ScrimDetail({
         matches: scrim.matches,
     });
 
+    // `scrim` is a new object every server render. Socket patches only cover a subset of
+    // fields (status/ready/matches/partyCode) — rosters, org info, and invitations are read
+    // straight from `scrim` and only change when a fresh copy arrives via router.refresh().
+    // Resync the locally-tracked state here (during render, not an effect) whenever that
+    // happens, so a stale `live`/`inviteStatus` snapshot from before a refresh never lingers
+    // on other viewers' screens after someone accepts/declines a challenge.
+    const [prevScrim, setPrevScrim] = useState(scrim);
+    if (prevScrim !== scrim) {
+        setPrevScrim(scrim);
+        setLive({
+            status: scrim.status,
+            result: scrim.result ?? null,
+            readyHost: scrim.readyHost,
+            readyOpponent: scrim.readyOpponent,
+            partyCode: scrim.partyCode ?? null,
+            matches: scrim.matches,
+        });
+        setInviteStatus(myInvitation?.status ?? null);
+    }
+
+    console.log("Test", scrim)
+
     function applyPatch(update: Partial<typeof live>) {
         setLive(prev => ({ ...prev, ...update }));
     }
@@ -365,6 +387,18 @@ export function ScrimDetail({
         });
     }
 
+    function handleAcceptChallenge() {
+        if (!userId) return;
+        setInviteStatus(InvitationStatus.Accepted);
+        handleAction(acceptChallengeWithRosterAction(scrim._id, userId, roster, isOrgChallenge ? myOrg?.name : liveTeam?.name));
+    }
+
+    function handleDeclineChallenge() {
+        if (!userId) return;
+        setInviteStatus(InvitationStatus.Declined);
+        handleAction(declineChallengeAction(scrim._id, userId));
+    }
+
     function handleMatchLogPatch(patch: MatchLogPatch) {
         const overrides: Partial<typeof live> = {};
         if (patch.status !== undefined) overrides.status = patch.status as ScrimmageStatus;
@@ -559,7 +593,7 @@ export function ScrimDetail({
                                 </div>
                                 {scrim.opponentTeam ? (
                                     <div className="space-y-0.5">
-                                        {scrim.opponentTeam.members.sort((a, b) => a._id === scrim.opponentTeam!.leader._id ? -1 : 0).map(m => (
+                                        {scrim.opponentTeam.members.sort((a, b) => a._id === scrim.opponentTeam!.leader._id ? -1 : 1).map(m => (
                                             <RosterRow key={m._id} member={m} isLeader={m._id === scrim.opponentTeam!.leader._id} />
                                         ))}
                                     </div>
@@ -750,7 +784,7 @@ export function ScrimDetail({
                     <h2 className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Matches</h2>
                     <MatchLog
                         scrimmageId={scrim._id}
-                        canViewParyCode={!isCompleted && (isHostMember || isOpponentMember)}
+                        canViewParyCode={!isCompleted && (isHostMember || isOpponentMember || isHostLeader || isOpponentLeader)}
                         matches={live.matches}
                         partyCode={live.partyCode}
                         isHostLeader={isHostLeader}
@@ -827,17 +861,17 @@ export function ScrimDetail({
                                 );
                             })}
                         </div>
-                    )}2000
+                    )}
 
                     <div className="flex items-center gap-3">
                         <Button
-                            onClick={() => handleAction(acceptChallengeWithRosterAction(scrim._id, userId, roster, isOrgChallenge ? myOrg?.name : liveTeam?.name))}
+                            onClick={handleAcceptChallenge}
                             disabled={pending || roster.length < 6}
                         >
                             Accept Challenge
                         </Button>
                         <button
-                            onClick={() => handleAction(declineChallengeAction(scrim._id, userId))}
+                            onClick={handleDeclineChallenge}
                             disabled={pending}
                             className="px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
                         >

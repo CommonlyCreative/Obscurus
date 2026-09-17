@@ -3,9 +3,12 @@
 # Rules:
 #   - A user can belong to at most ONE organization at a time
 #   - An org can have any number of members but only 6 core players
-#   - OrgRole.MANAGER has full control; OrgRole.PLAYER can play and receive invitations
+#   - OrgRole.MANAGER has full control over the org (roster, invites, settings);
+#     OrgRole.PLAYER does not. This is a permission level, independent of whether
+#     the member actually plays — a manager can also be a player, or not
+#     (see OrganizationMember.isPlayer).
 #   - The org owner is always a MANAGER
-#   - Core team slots (coreTeam) must be 6 PLAYER members; used as the default roster
+#   - Core team slots (coreTeam) must be members with isPlayer: true; used as the default roster
 
 type Organization {
     _id: ID!
@@ -51,6 +54,7 @@ type Timesheet {
 type OrganizationMember {
     user: User!
     orgRole: OrgRole!
+    isPlayer: Boolean!   # Eligible for the core team roster — independent of orgRole
     status: OrgMemberStatus!
     joinedAt: Timestamp!
 }
@@ -58,7 +62,7 @@ type OrganizationMember {
 # Organization-level roles (distinct from platform Role in profile.graphql)
 enum OrgRole {
     MANAGER     # Schedules scrimmages, manages roster, assigns subs, invites members
-    PLAYER      # Active playing member; eligible for core team and org-sub slots
+    PLAYER      # No management permissions
 }
 
 enum OrgMemberStatus {
@@ -72,6 +76,14 @@ input CreateOrganizationInput {
     slug: String!
     description: String
     logo: String
+}
+
+# A manager-created placeholder player — not yet signed up.
+# If a real user later signs in with Discord using this exact email, Better Auth's
+# implicit account linking adopts this same user document instead of creating a new one.
+input CreatePlaceholderPlayerInput {
+    name: String!
+    email: String!
 }
 
 input UpdateOrganizationInput {
@@ -114,10 +126,12 @@ extend type Mutation {
 
     # Membership — manager-only operations
     inviteMember(org_id: String!, user_id: String!, orgRole: OrgRole!): OrganizationMember
+    createPlaceholderPlayer(org_id: String!, orgRole: OrgRole!, input: CreatePlaceholderPlayerInput!): OrganizationMember
     acceptOrgInvite(org_id: String!, user_id: String!): OrganizationMember
     declineOrgInvite(org_id: String!, user_id: String!): Boolean
     removeMember(org_id: String!, user_id: String!): Boolean
     updateMemberRole(org_id: String!, user_id: String!, orgRole: OrgRole!): OrganizationMember
+    updateMemberIsPlayer(org_id: String!, user_id: String!, isPlayer: Boolean!): OrganizationMember
 
     # Core team — manager-only; max 6 slots; must be active PLAYER members of this org
     setCoreTeam(org_id: String!, user_ids: [String!]!): Organization

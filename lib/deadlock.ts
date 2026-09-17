@@ -69,17 +69,18 @@ export function calculateMMR(rank: Rank, division: number) {
 }
 
 export const Rank = {
+    OBSCURUS:  { name: "Obscurus",  ranking: 0,  color: "#2d2b29", text: "text-[#2d2b29]", bg: "bg-[#2d2b29]/10" },
     INITIATE:  { name: "Initiate",  ranking: 1,  color: "#8B6914", text: "text-[#8B6914]", bg: "bg-[#8B6914]/10" },
-    SEEKER:    { name: "Seeker",    ranking: 2,  color: "#6B3A5E", text: "text-[#6B3A5E]", bg: "bg-[#6B3A5E]/10" },
-    ALCHEMIST: { name: "Alchemist", ranking: 3,  color: "#4A7A2E", text: "text-[#4A7A2E]", bg: "bg-[#4A7A2E]/10" },
-    ARCHANIST: { name: "Archanist", ranking: 4,  color: "#3DA53D", text: "text-[#3DA53D]", bg: "bg-[#3DA53D]/10" },
-    RITUALIST: { name: "Ritualist", ranking: 5,  color: "#7B8A8E", text: "text-[#7B8A8E]", bg: "bg-[#7B8A8E]/10" },
-    EMISSARY:  { name: "Emissary",  ranking: 6,  color: "#9B2D4E", text: "text-[#9B2D4E]", bg: "bg-[#9B2D4E]/10" },
-    ARCHON:    { name: "Archon",    ranking: 7,  color: "#6A4D8A", text: "text-[#6A4D8A]", bg: "bg-[#6A4D8A]/10" },
-    ORACLE:    { name: "Oracle",    ranking: 8,  color: "#A0764A", text: "text-[#A0764A]", bg: "bg-[#A0764A]/10" },
-    PHANTOM:   { name: "Phantom",   ranking: 9,  color: "#7A7A7E", text: "text-[#7A7A7E]", bg: "bg-[#7A7A7E]/10" },
-    ASCENDANT: { name: "Ascendant", ranking: 10,  color: "#C8A832", text: "text-[#C8A832]", bg: "bg-[#C8A832]/10" },
-    ETERNUS:   { name: "Eternus",   ranking: 11, color: "#40E8D8", text: "text-[#40E8D8]", bg: "bg-[#40E8D8]/10" },
+    SEEKER:    { name: "Seeker",    ranking: 2,  color: "#6c3f2e", text: "text-[#6c3f2e]", bg: "bg-[#6c3f2e]/10" },
+    ACOLYTE:   { name: "Acolyte",   ranking: 3,  color: "#67696b", text: "text-[#67696b]", bg: "bg-[#67696b]/10" },
+    SENTINEL:  { name: "Sentinel",  ranking: 4,  color: "#a06837", text: "text-[#a06837]", bg: "bg-[#a06837]/10" },
+    MYSTIC:    { name: "Mystic",    ranking: 5,  color: "#bdcdda", text: "text-[#bdcdda]", bg: "bg-[#bdcdda]/10" },
+    RITUALIST: { name: "Ritualist", ranking: 6,  color: "#deb64b", text: "text-[#deb64b]", bg: "bg-[#deb64b]/10" },
+    EMISSARY:  { name: "Emissary",  ranking: 7,  color: "#a9d4d3", text: "text-[#a9d4d3]", bg: "bg-[#a9d4d3]/10" },
+    ORACLE:    { name: "Oracle",    ranking: 8,  color: "#d2dfe8", text: "text-[#d2dfe8]", bg: "bg-[#d2dfe8]/10" },
+    PHANTOM:   { name: "Phantom",   ranking: 9,  color: "#7076c1", text: "text-[#7076c1]", bg: "bg-[#7076c1]/10" },
+    ASCENDANT: { name: "Ascendant", ranking: 10, color: "#e7b560", text: "text-[#e7b560]", bg: "bg-[#e7b560]/10" },
+    ETERNUS:   { name: "Eternus",   ranking: 11, color: "#adede3", text: "text-[#adede3]", bg: "bg-[#adede3]/10" },
 } as const;
 
 export const convertSteam32toSteam64 = (friend_code: string | number) => {

@@ -12,6 +12,7 @@ import { NotificationType, OrgRequestStatus, SendNotificationMutation } from "@/
 import { SendNotificationM } from "@/lib/shared-graphs";
 import { getGoogleClient } from "@/lib/google";
 import { google } from "googleapis";
+import { getPresence } from "@/lib/socket/presence";
 
 // Duration per best-of type (mirrors CreateScrimForm ENDTIME_CONVERSION)
 const BESTOF_DURATION_MS: Record<string, number> = {
@@ -674,6 +675,7 @@ export async function getUserDetailAction(userId: string): Promise<UserDetail | 
     const doc = await db.collection("user").findOne({ _id: new ObjectId(userId) });
     if (!doc) return null;
     const d = doc as any;
+    const online = await getPresence(userId);
     return {
         _id: d._id.toString(),
         name: d.name ?? "",
@@ -686,7 +688,7 @@ export async function getUserDetailAction(userId: string): Promise<UserDetail | 
         bio: d.bio ?? "",
         heroes: d.heroes ?? [],
         balance: d.balance ?? { credits: 0, pending: 0, winnings: 0 },
-        online: d.online ?? false,
+        online,
         organization: d.organization ?? "",
         createdAt: d.createdAt ?? 0,
     };

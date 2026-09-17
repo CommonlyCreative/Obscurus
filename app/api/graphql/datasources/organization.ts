@@ -91,6 +91,7 @@ export class OrganizationDataSource {
             organization: "",   // filled below after we have the org _id
             user: owner_id,
             orgRole: OrgRole.Manager,
+            isPlayer: true,
             status: OrgMemberStatus.Active,
             joinedAt: Date.now(),
         };
@@ -160,7 +161,30 @@ export class OrganizationDataSource {
             organization: org_id.toString(),
             user: user_id,
             orgRole,
+            isPlayer: true,
             status: OrgMemberStatus.Invited,
+            joinedAt: Date.now(),
+        };
+        await this.collection.updateOne({ _id: new ObjectId(org_id) }, { $push: { members: member } as any });
+        return member;
+    }
+
+    // Adds a member as ACTIVE immediately — used for manager-created placeholder
+    // players, who have no one to accept an invite on their behalf.
+    async addActiveMember(org_id: ObjectId | string, user_id: string, orgRole: OrgRole): Promise<DBOrganizationMember | null> {
+        const existing = await this.getOrganizationByMember(user_id);
+        if (existing) throw new Error("User is already a member of an organization");
+
+        const org = await this.getOrganization(org_id);
+        if (!org) return null;
+
+        const member: DBOrganizationMember = {
+            _id: new ObjectId(),
+            organization: org_id.toString(),
+            user: user_id,
+            orgRole,
+            isPlayer: true,
+            status: OrgMemberStatus.Active,
             joinedAt: Date.now(),
         };
         await this.collection.updateOne({ _id: new ObjectId(org_id) }, { $push: { members: member } as any });
@@ -215,6 +239,28 @@ export class OrganizationDataSource {
         org.members[memberIdx].orgRole = orgRole;
         org.updatedAt = Date.now();
         await this.collection.updateOne({ _id: new ObjectId(org_id) }, { $set: org });
+        return org.members[memberIdx];
+    }
+
+    // Whether a member counts as active playing personnel — independent of
+    // orgRole, so a manager can opt in or out of being a player too.
+    async updateMemberIsPlayer(org_id: ObjectId | string, user_id: string, isPlayer: boolean): Promise<DBOrganizationMember | null> {
+        const org = await this.getOrganization(org_id);
+        if (!org) return null;
+
+        const memberIdx = org.members.findIndex(m => m.user === user_id);
+        if (memberIdx === -1) throw new Error("Member not found");
+
+        org.members[memberIdx].isPlayer = isPlayer;
+        org.updatedAt = Date.now();
+
+        // A non-player can't remain on the core team roster.
+        if (!isPlayer) org.coreTeam = org.coreTeam.filter(id => id !== user_id);
+
+        await this.collection.updateOne(
+            { _id: new ObjectId(org_id) },
+            { $set: { members: org.members, coreTeam: org.coreTeam, updatedAt: org.updatedAt } }
+        );
         return org.members[memberIdx];
     }
 

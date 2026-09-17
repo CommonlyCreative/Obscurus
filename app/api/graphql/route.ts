@@ -14,6 +14,7 @@ import { WagerDataSource } from "./datasources/wager";
 import { UserDataSource } from "./datasources/user";
 import { OrgRequestDataSource } from "./datasources/org-request";
 import { NotificationDataSource } from "./datasources/notification";
+import { PresenceDataSource } from "./datasources/presence";
 
 const typeDefs       = fs.readFileSync(path.join(process.cwd(), "/app/api/graphql/graphs/default.graphql"))
 const profileDefs    = fs.readFileSync(path.join(process.cwd(), "/app/api/graphql/graphs/users.graphql"))
@@ -35,6 +36,7 @@ export interface Context {
         notifications: NotificationDataSource
         stripeEvents: StripeEventDataSource
         wagers: WagerDataSource
+        presence: PresenceDataSource
     }
 }
 
@@ -71,6 +73,7 @@ const handler = startServerAndCreateNextHandler<NextRequest, Context>(server, {
                     db.collection("credit_transactions"),
                     db.collection("credit_purchases"),
                 ),
+                presence:      new PresenceDataSource(),
             }
         }
     },

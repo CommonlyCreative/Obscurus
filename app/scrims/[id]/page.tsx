@@ -8,7 +8,6 @@ import { Scrim, ScrimDetail, ScrimDetailProps } from "@/components/scrims/ScrimD
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
 import { convertSteam64toSteam32 } from "@/lib/deadlock";
 import { ArrayElement } from "@/lib/utils";
-import { getStatlockerRanksAction } from "@/app/profile/[id]/actions";
 
 const GetViewerOrgQuery = graphql(`
     query GetViewerOrg($user_id: String!) {
@@ -123,11 +122,14 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     const opponentMemberIds = scrim.opponentTeam?.members.map((m) => m._id) ?? [];
     const isHostMember = user ? hostMemberIds.includes(user.id) : false;
     const isOpponentMember = user ? opponentMemberIds.includes(user.id) : false;
+    // const isManager
     const isHostLeader = user?.id === scrim.hostTeam?.leader._id;
     const isOpponentLeader = user?.id === scrim.opponentTeam?.leader._id;
     const isOpponentOrgManager = scrim.opponentOrg?.members.some(
         member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
     ) ?? false;
+
+    console.log("")
 
     return (
         <ScrimDetail

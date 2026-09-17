@@ -13,6 +13,7 @@ import {
 } from "@/app/scrims/[id]/actions";
 import MatchData from "./MatchData";
 import { toast } from "sonner";
+import { Check, Copy } from "lucide-react";
 
 interface Match {
     number: number;
@@ -73,6 +74,7 @@ export function MatchLog({
     const [codeEditing, setCodeEditing] = useState(!partyCode);
     const [error, setError] = useState<string | null>(null);
     const [matchInputError, setMatchInputError] = useState<string | null>(null);
+    const [codeCopied, setCodeCopied] = useState(false);
 
     const activeMatch = matches.find((m) => !m.result);
     const completedMatches = matches.filter((m) => m.result);
@@ -89,6 +91,10 @@ export function MatchLog({
             setMatchInputError(null);
             if (!trimmed || isNaN(Number(trimmed)) || !isFinite(Number(trimmed))) {
                 setMatchInputError("Invalid Match ID. Copy a valid numeric match ID from Deadlock and try again.");
+                return;
+            }
+            if (completedMatches.some(match => match.match_id === trimmed)){
+                setMatchInputError(`Duplicate Match. This match has already been logged. [${trimmed}]`);
                 return;
             }
             setMatchId(trimmed);
@@ -143,7 +149,7 @@ export function MatchLog({
             try {
                 let result = MatchResult.Draw;
                 const metadata = await getMatch(matchId);
-                if (metadata && typeof metadata.match_info.winning_team === "number") {
+                if (metadata && "match_info" in metadata && typeof metadata.match_info.winning_team === "number") {
                     const wt = metadata.match_info.winning_team;
                     result =
                         wt !== 0 && wt !== 1 ? MatchResult.Draw
@@ -161,6 +167,12 @@ export function MatchLog({
         });
     }
 
+    function handleCopyCode(code: string) {
+        navigator.clipboard.writeText(code);
+        setCodeCopied(true);
+        setTimeout(() => setCodeCopied(false), 2000);
+    }
+
     function handleSaveCode() {
         if (!codeInput.trim()) return;
         setError(null);
@@ -174,6 +186,8 @@ export function MatchLog({
             }
         });
     }
+
+    console.log('ANOTHER',canViewParyCode, isHostLeader, codeEditing)
 
     return (
         <div className="space-y-4">
@@ -208,10 +222,23 @@ export function MatchLog({
                         <div className="flex items-center gap-3">
                             <span className="font-mono text-lg font-bold text-primary tracking-widest">{partyCode}</span>
                             <button
-                                onClick={() => navigator.clipboard.writeText(partyCode)}
-                                className="text-xs text-muted hover:text-dimmed transition-colors"
+                                onClick={() => handleCopyCode(partyCode)}
+                                className={cn(
+                                    "flex items-center gap-1 text-xs transition-colors",
+                                    codeCopied ? "text-success" : "text-muted hover:text-dimmed"
+                                )}
                             >
-                                Copy
+                                {codeCopied ? (
+                                    <>
+                                        <Check className="w-3.5 h-3.5" />
+                                        Copied
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className="w-3.5 h-3.5" />
+                                        Copy
+                                    </>
+                                )}
                             </button>
                         </div>
                     ) : (

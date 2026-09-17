@@ -56,11 +56,51 @@ const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>(); // us
 
 const TEAM_GRACE_PERIOD_MS = 30_000;
 
+// ─── Presence ───────────────────────────────────────────────────────────────
+// Online status is a heartbeat + expiry, not a stored flag: a user counts as
+// online as long as we've heard from them (login or a periodic heartbeat)
+// within PRESENCE_TIMEOUT_MS. A sweep evicts anyone who's gone quiet, so a
+// dropped connection or backgrounded tab doesn't flip someone offline
+// instantly the way a raw socket disconnect would.
+const lastSeen = new Map<string, number>(); // userId → last heartbeat timestamp
+const PRESENCE_HEARTBEAT_INTERVAL_MS = 20_000;
+const PRESENCE_TIMEOUT_MS = 45_000;
+
+function markSeen(userId: string) {
+    lastSeen.set(userId, Date.now());
+}
+
+function isOnline(userId: string): boolean {
+    const seen = lastSeen.get(userId);
+    return seen !== undefined && Date.now() - seen < PRESENCE_TIMEOUT_MS;
+}
+
+setInterval(() => {
+    const cutoff = Date.now() - PRESENCE_TIMEOUT_MS;
+    for (const [userId, seen] of lastSeen) {
+        if (seen < cutoff) lastSeen.delete(userId);
+    }
+}, PRESENCE_HEARTBEAT_INTERVAL_MS);
+
+// Called server-to-server from the Next.js/GraphQL process, which has no
+// access to this process's in-memory presence state otherwise.
+app.post("/presence", (req, res) => {
+    const userIds = req.body?.userIds;
+    if (!Array.isArray(userIds)) return res.status(400).json({ error: "userIds must be an array" });
+
+    const result: Record<string, boolean> = {};
+    for (const userId of userIds) {
+        if (typeof userId === "string") result[userId] = isOnline(userId);
+    }
+    return res.json(result);
+});
+
 io.on("connection", (socket: Socket) => {
     console.log("Client connected:", socket.id);
 
     socket.on("login", (userId: string) => {
         if (!userId) return;
+        markSeen(userId);
 
         if (socket.id === connectedUsers[userId]) return;
 
@@ -80,6 +120,11 @@ io.on("connection", (socket: Socket) => {
             clearTimeout(pending);
             disconnectTimers.delete(userId);
         }
+    });
+
+    socket.on("presence:heartbeat", (userId: string) => {
+        if (!userId) return;
+        markSeen(userId);
     });
 
     setupTeamSocket(io, socket);

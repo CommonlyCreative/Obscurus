@@ -32,7 +32,6 @@ const options = {
                     return {
                         data: {
                             ...user,
-                            online: true,
                             heroes: [],
                             region: "NA",
                             bio: "I'm new here! Excited to start scrimming.",
@@ -52,12 +51,15 @@ const options = {
     },
 
     user: {
+        // Store emailVerified under the "verified" field name so it lines up with
+        // GraphQL's User.verified and the field every other creation path (fillers,
+        // manually-created placeholder players) already writes. Better Auth's own
+        // internal logic keeps using `emailVerified` as normal — this only renames
+        // the physical storage field via the adapter's field-mapping layer.
+        fields: {
+            emailVerified: "verified",
+        },
         additionalFields: {
-            online: {
-                type: "boolean",
-                required: true,
-                defaultValue: false,
-            },
             heroes: {
                 type: "number[]",
                 required: true,

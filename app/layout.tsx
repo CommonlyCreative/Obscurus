@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip"
 import Notification from "@/components/shared/Notification";
 import { Suspense } from "react";
+import { convertSteam32toSteam64, convertSteam64toSteam32 } from "@/lib/deadlock";
 
 const inter = Inter({
     variable: "--font-inter",

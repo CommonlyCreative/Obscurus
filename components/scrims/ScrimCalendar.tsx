@@ -228,7 +228,7 @@ function formatTime(ms: number): string {
     });
 }
 
-function ScrimEventCard({ scrim }: { scrim: CalendarScrim }) {
+function ScrimEventCard({ scrim, compact = false }: { scrim: CalendarScrim; compact?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const status = STATUS_CONFIG[scrim.status];
 
@@ -257,28 +257,40 @@ function ScrimEventCard({ scrim }: { scrim: CalendarScrim }) {
                 ref={refs.setReference}
                 {...getReferenceProps()}
                 className={cn(
-                    "border border-edge border-l-2 rounded-md bg-surface-2 px-2.5 py-2 cursor-pointer",
-                    "hover:border-primary/30 hover:bg-surface transition-colors",
+                    "border-l-2 cursor-pointer transition-colors",
+                    compact
+                        ? "flex items-center gap-1.5 rounded bg-surface-2 px-1.5 py-1 hover:bg-surface"
+                        : "border border-edge rounded-md bg-surface-2 px-2.5 py-2 hover:border-primary/30 hover:bg-surface",
                     status.border,
                 )}
             >
-                <div className="flex items-start justify-between gap-1 mb-1">
-                    <p className="text-xs font-semibold text-foreground truncate leading-tight">
-                        {hostTeamName}
-                    </p>
-                    <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", status.pill)}>
-                        {BEST_OF_LABEL[scrim.bestOf]}
-                    </span>
-                </div>
-                <p className="text-[10px] text-dimmed truncate mb-1.5">
-                    vs {opponentTeamName}
-                </p>
-                <div className="flex items-center gap-1.5">
-                    <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", status.dot)} />
-                    <span className="text-[10px] text-muted">{formatTime(startingTime)}</span>
-                    <span className="text-[10px] text-edge">·</span>
-                    <span className="text-[10px] text-muted">{scrim.region}</span>
-                </div>
+                {compact ? (
+                    <>
+                        <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", status.dot)} />
+                        <span className="text-[10px] text-muted shrink-0">{formatTime(startingTime)}</span>
+                        <span className="text-[10px] font-medium text-foreground truncate">{hostTeamName}</span>
+                    </>
+                ) : (
+                    <>
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                            <p className="text-xs font-semibold text-foreground truncate leading-tight">
+                                {hostTeamName}
+                            </p>
+                            <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0", status.pill)}>
+                                {BEST_OF_LABEL[scrim.bestOf]}
+                            </span>
+                        </div>
+                        <p className="text-[10px] text-dimmed truncate mb-1.5">
+                            vs {opponentTeamName}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                            <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", status.dot)} />
+                            <span className="text-[10px] text-muted">{formatTime(startingTime)}</span>
+                            <span className="text-[10px] text-edge">·</span>
+                            <span className="text-[10px] text-muted">{scrim.region}</span>
+                        </div>
+                    </>
+                )}
             </div>
 
             {isOpen && (
@@ -381,20 +393,37 @@ function ScrimEventCard({ scrim }: { scrim: CalendarScrim }) {
     );
 }
 
+const MAX_VISIBLE_PER_DAY = 3;
+
 export function ScrimCalendar({ scrims }: { scrims: ScrimCalendarQuery["getScrimmages"] }) {
-    const [weekOffset, setWeekOffset] = useState(0);
+    const [monthOffset, setMonthOffset] = useState(0);
+    const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    const dow = todayDate.getDay();
-    const toMonday = dow === 0 ? -6 : 1 - dow;
-    const weekStart = new Date(todayDate);
-    weekStart.setDate(todayDate.getDate() + toMonday + weekOffset * 7);
+    const monthAnchor = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const month = monthAnchor.getMonth();
+    const year = monthAnchor.getFullYear();
 
-    const days = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(weekStart);
-        d.setDate(weekStart.getDate() + i);
+    const firstOfMonth = new Date(year, month, 1);
+    const lastOfMonth = new Date(year, month + 1, 0);
+
+    const firstDow = firstOfMonth.getDay();
+    const leadingDays = firstDow === 0 ? 6 : firstDow - 1;
+    const gridStart = new Date(firstOfMonth);
+    gridStart.setDate(firstOfMonth.getDate() - leadingDays);
+
+    const lastDow = lastOfMonth.getDay();
+    const trailingDays = lastDow === 0 ? 0 : 7 - lastDow;
+    const gridEnd = new Date(lastOfMonth);
+    gridEnd.setDate(lastOfMonth.getDate() + trailingDays);
+
+    const totalCells = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86_400_000) + 1;
+
+    const days = Array.from({ length: totalCells }, (_, i) => {
+        const d = new Date(gridStart);
+        d.setDate(gridStart.getDate() + i);
         return d;
     });
 
@@ -414,41 +443,54 @@ export function ScrimCalendar({ scrims }: { scrims: ScrimCalendarQuery["getScrim
     });
 
     const isToday = (d: Date) => d.toDateString() === new Date().toDateString();
+    const isCurrentMonth = (d: Date) => d.getMonth() === month;
+    const dayKey = (d: Date) => d.toDateString();
 
-    const totalThisWeek = scrimsByDay.reduce((sum, day) => sum + day.length, 0);
+    function toggleExpanded(key: string) {
+        setExpandedDays((prev) => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+        });
+    }
 
-    const weekLabel = `${days[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${days[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+    const totalThisMonth = scrimsByDay.reduce(
+        (sum, day, i) => sum + (isCurrentMonth(days[i]) ? day.length : 0),
+        0
+    );
+
+    const monthLabel = monthAnchor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Week navigation */}
+            {/* Month navigation */}
             <div className="flex items-center justify-between mb-6">
                 <div>
-                    <p className="text-sm font-semibold text-foreground">{weekLabel}</p>
+                    <p className="text-sm font-semibold text-foreground">{monthLabel}</p>
                     <p className="text-xs text-muted mt-0.5">
-                        {totalThisWeek} scrimmage{totalThisWeek !== 1 ? "s" : ""} this week
+                        {totalThisMonth} scrimmage{totalThisMonth !== 1 ? "s" : ""} this month
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    {weekOffset !== 0 && (
+                    {monthOffset !== 0 && (
                         <button
-                            onClick={() => setWeekOffset(0)}
+                            onClick={() => setMonthOffset(0)}
                             className="px-3 py-1.5 text-xs font-semibold border border-edge rounded-md text-dimmed hover:text-foreground hover:border-foreground/20 transition-colors"
                         >
                             Today
                         </button>
                     )}
                     <button
-                        onClick={() => setWeekOffset((w) => w - 1)}
+                        onClick={() => setMonthOffset((m) => m - 1)}
                         className="w-8 h-8 flex items-center justify-center border border-edge rounded-md text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
-                        aria-label="Previous week"
+                        aria-label="Previous month"
                     >
                         <ChevronLeft className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setWeekOffset((w) => w + 1)}
+                        onClick={() => setMonthOffset((m) => m + 1)}
                         className="w-8 h-8 flex items-center justify-center border border-edge rounded-md text-muted hover:text-foreground hover:border-foreground/20 transition-colors"
-                        aria-label="Next week"
+                        aria-label="Next month"
                     >
                         <ChevronRight className="w-4 h-4" />
                     </button>
@@ -467,44 +509,68 @@ export function ScrimCalendar({ scrims }: { scrims: ScrimCalendarQuery["getScrim
 
             {/* Calendar grid — scrollable on small screens */}
             <div className="overflow-x-auto">
-                <div className="grid grid-cols-7 gap-2 min-w-150">
+                <div className="min-w-150">
                     {/* Day headers */}
-                    {days.map((day, i) => (
-                        <div
-                            key={i}
-                            className={cn(
-                                "text-center pb-3 border-b-2",
-                                isToday(day) ? "border-b-primary" : "border-b-edge",
-                            )}
-                        >
-                            <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">
-                                {DAY_NAMES[i]}
-                            </p>
-                            <p
-                                className={cn(
-                                    "text-xl font-black mt-0.5 leading-none",
-                                    isToday(day) ? "text-primary" : "text-foreground",
-                                )}
-                            >
-                                {day.getDate()}
-                            </p>
-                        </div>
-                    ))}
+                    <div className="grid grid-cols-7 gap-2">
+                        {DAY_NAMES.map((name) => (
+                            <div key={name} className="text-center pb-2 border-b-2 border-b-edge">
+                                <p className="text-[10px] text-muted uppercase tracking-wider font-semibold">
+                                    {name}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
 
-                    {/* Event columns */}
-                    {days.map((day, i) => (
-                        <div key={i} className="pt-2 space-y-1.5 min-h-48">
-                            {scrimsByDay[i].length > 0 ? (
-                                scrimsByDay[i].map((scrim) => (
-                                    <ScrimEventCard key={scrim._id} scrim={scrim} />
-                                ))
-                            ) : (
-                                <div className="flex items-center justify-center min-h-16">
-                                    <span className="text-xs text-edge select-none">—</span>
+                    {/* Month cells */}
+                    <div className="grid grid-cols-7 gap-2 mt-2">
+                        {days.map((day, i) => {
+                            const key = dayKey(day);
+                            const dayScrims = scrimsByDay[i];
+                            const expanded = expandedDays.has(key);
+                            const visibleScrims = expanded ? dayScrims : dayScrims.slice(0, MAX_VISIBLE_PER_DAY);
+                            const hiddenCount = dayScrims.length - visibleScrims.length;
+
+                            return (
+                                <div
+                                    key={key}
+                                    className={cn(
+                                        "min-h-28 rounded-md border border-edge p-1.5 space-y-1",
+                                        isCurrentMonth(day) ? "bg-surface-2/40" : "bg-transparent opacity-40",
+                                    )}
+                                >
+                                    <p
+                                        className={cn(
+                                            "text-xs font-bold leading-none px-0.5",
+                                            isToday(day) ? "text-primary" : isCurrentMonth(day) ? "text-foreground" : "text-muted",
+                                        )}
+                                    >
+                                        {day.getDate()}
+                                    </p>
+                                    <div className="space-y-1">
+                                        {visibleScrims.map((scrim) => (
+                                            <ScrimEventCard key={scrim._id} scrim={scrim} compact />
+                                        ))}
+                                        {hiddenCount > 0 && (
+                                            <button
+                                                onClick={() => toggleExpanded(key)}
+                                                className="w-full text-left text-[10px] text-primary hover:text-primary-dim px-1.5 transition-colors"
+                                            >
+                                                +{hiddenCount} more
+                                            </button>
+                                        )}
+                                        {expanded && dayScrims.length > MAX_VISIBLE_PER_DAY && (
+                                            <button
+                                                onClick={() => toggleExpanded(key)}
+                                                className="w-full text-left text-[10px] text-muted hover:text-dimmed px-1.5 transition-colors"
+                                            >
+                                                Show less
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
         </div>

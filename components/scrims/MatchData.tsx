@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react";
-import type { DeadlockMatch } from "@/lib/types/deadlock/match";
+import type { MatchLookupResult } from "@/lib/actions/deadlockMatchCache";
 import { ChevronLeft, Swords, Target, Heart } from "lucide-react";
 import { getMatch } from "@/app/scrims/[id]/actions";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ type TeamDisplay = {
 
 function MatchData({ match_id, result }: { match_id: string, result: MatchResult }) {
     const router = useRouter();
-    const [metadata, setMetadata] = useState<DeadlockMatch | null>(null);
+    const [metadata, setMetadata] = useState<MatchLookupResult | null>(null);
     const [enrichedPlayers, setEnrichedPlayers] = useState<EnrichedPlayer[] | null>(null);
     const [viewPlayer, setViewPlayer] = useState<EnrichedPlayer | null>(null);
 
@@ -27,33 +27,32 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
         { name: "Arch Mother", id: 1 },
     ] as TeamDisplay[];
 
-    const hostTeam = metadata?.match_info
-        ? result === MatchResult.HostWin
-            ? teams[metadata.match_info.winning_team]
-            : teams[metadata.match_info.winning_team === 1 ? 0 : 1]
-        : null;
-    const opponentTeam = metadata?.match_info
-        ? result === MatchResult.OpponentWin
-            ? teams[metadata.match_info.winning_team]
-            : teams[metadata.match_info.winning_team === 1 ? 0 : 1]
-        : null;
-
     useEffect(() => {
         getMatch(match_id).then(async match => {
             setMetadata(match);
-            if (match?.match_info?.players) {
+            if ("match_info" in match && match.match_info.players) {
                 const players = await getMatchPlayersData(match_id, match.match_info.players);
                 setEnrichedPlayers(players);
             }
         });
     }, [match_id]);
 
-    if (!metadata || !metadata.match_info) {
-        if (metadata && ((metadata as any).errorMessage || (metadata as any).error)) {
-            return <p className="text-xs text-danger">{(metadata as any).errorMessage ?? "There was an error loading this match"}</p>;
-        }
-        return <Loading />;
+    useEffect(() => {
+        console.log("UPDATED", enrichedPlayers)
+    }, [enrichedPlayers])
+
+    if (!metadata) return <Loading />;
+
+    if ("errorMessage" in metadata) {
+        return <p className="text-xs text-danger">{metadata.errorMessage}</p>;
     }
+
+    const hostTeam = result === MatchResult.HostWin
+        ? teams[metadata.match_info.winning_team]
+        : teams[metadata.match_info.winning_team === 1 ? 0 : 1];
+    const opponentTeam = result === MatchResult.OpponentWin
+        ? teams[metadata.match_info.winning_team]
+        : teams[metadata.match_info.winning_team === 1 ? 0 : 1];
 
     if (!hostTeam || !opponentTeam) {
         return <p className="text-xs text-danger">There was an error collecting teams</p>;

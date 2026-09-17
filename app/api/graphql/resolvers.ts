@@ -17,8 +17,9 @@ import {
     OrgRequest,
 } from "./server";
 import { asyncMap } from "@/lib/utils";
-import { getStatlockerRank } from "@/lib/actions/deadlockapi";
+import { getDeadlockRank } from "@/lib/actions/deadlockapi";
 import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
+import { convertServerPatchToFullTree } from "next/dist/client/components/segment-cache/navigation";
 
 const TimestampScalar = new GraphQLScalarType({
     name: "Timestamp",
@@ -46,6 +47,12 @@ export const resolvers: Resolvers = {
     // Field resolvers — User
     // =========================================================================
     User: {
+        // Presence is a live heartbeat/expiry tracked by the socket server, not a
+        // stored field — see lib/socket/presence.ts and socket.mts.
+        online: async (parent, _, { dataSources: { presence } }) => {
+            const user = parent as any as DBUser;
+            return presence.load(user._id.toString());
+        },
         scrimmages: async (parent, _, { dataSources: { scrimmages } }) => {
             const user = parent as any as DBUser;
             try {
@@ -58,11 +65,11 @@ export const resolvers: Resolvers = {
         stats: async (parent, _, { dataSources: { users } }) => {
             const user = parent as any as DBUser;
             if (!user.steam)return null;
-            const stat = await getStatlockerRank(convertSteam64toSteam32(user.steam.id))
+            const stat = await getDeadlockRank(convertSteam64toSteam32(user.steam.id))
             if (!stat)return null;
-            const rankDisplay = getRankByMMR(stat.averageMatchRankNumber)
+            const rankDisplay = getRankByMMR(stat.badge)
             if (!rankDisplay)return null;
-            return { mmr: stat.averageMatchRankNumber, ...rankDisplay }
+            return { mmr: stat.badge, ...rankDisplay }
         },
         organization: async (parent, _, { dataSources: { organizations } }) => {
             const user = parent as any as DBUser;
@@ -194,6 +201,12 @@ export const resolvers: Resolvers = {
             const user = await users.getGraphQLUser(member.user);
             if (!user) throw new Error("Failed to fetch member user");
             return user;
+        },
+        // Members created before this field existed default to true, matching
+        // prior behavior where every active member was implicitly core-team eligible.
+        isPlayer: (parent) => {
+            const member = parent as any as DBOrganizationMember;
+            return member.isPlayer ?? true;
         },
     },
     OrgRequest: {
@@ -415,9 +428,6 @@ export const resolvers: Resolvers = {
         updateUser: async (_, { user_id, input }, { dataSources: { users } }) => {
             return users.updateUserById(user_id, input) as any as Promise<User | null>;
         },
-        setOnlineStatus: async (_, { user_id, online }, { dataSources: { users } }) => {
-            return users.setOnlineStatus(user_id, online) as any as Promise<User | null>;
-        },
         createCustomer: async (_, { input }, { dataSources: { customers } }) => {
             return customers.createCustomer(input) as any as Promise<Customer>;
         },
@@ -527,7 +537,11 @@ export const resolvers: Resolvers = {
             return organizations.updateOrganization(org_id, input) as any as Promise<Organization | null>;
         },
         deleteOrganization: async (_, { org_id }, { dataSources: { organizations, users } }) => {
-            await users.removeOrganizationFromAllMembers(org_id);
+            const org = await organizations.getOrganization(org_id);
+            for (const member of org?.members ?? []) {
+                const deleted = await users.deleteIfGhost(member.user);
+                if (!deleted) await users.addOrganizationToUser(member.user, "");
+            }
             return organizations.deleteOrganization(org_id);
         },
         transferOwnership: async (_, { org_id, new_owner_id }, { dataSources: { organizations } }) => {
@@ -536,17 +550,46 @@ export const resolvers: Resolvers = {
         inviteMember: async (_, { org_id, user_id, orgRole }, { dataSources: { organizations } }) => {
             return organizations.inviteMember(org_id, user_id, orgRole) as any as Promise<OrganizationMember | null>;
         },
+        createPlaceholderPlayer: async (_, { org_id, orgRole, input }, { dataSources: { organizations, users } }) => {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
+
+            const existing = await users.getUserByEmail(input.email);
+            if (existing) throw new Error("A user with this email already exists — invite them instead of creating a new player");
+
+            const user = await users.createManualUser(input);
+            const member = await organizations.addActiveMember(org_id, user._id.toString(), orgRole);
+            if (!member) throw new Error("Failed to add player to organization");
+
+            if (!await users.addOrganizationToUser(user._id, org_id)) {
+                throw new Error(`Unable to link placeholder player to organization: ${org_id}`);
+            }
+
+            return member as any as OrganizationMember;
+        },
         acceptOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations } }) => {
             return organizations.acceptOrgInvite(org_id, user_id) as any as Promise<OrganizationMember | null>;
         },
-        declineOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations } }) => {
-            return organizations.declineOrgInvite(org_id, user_id) as any as Promise<boolean>;
+        declineOrgInvite: async (_, { org_id, user_id }, { dataSources: { organizations, users } }) => {
+            const declined = await organizations.declineOrgInvite(org_id, user_id);
+            if (declined) {
+                const deleted = await users.deleteIfGhost(user_id);
+                if (!deleted) await users.addOrganizationToUser(user_id, "");
+            }
+            return declined;
         },
-        removeMember: async (_, { org_id, user_id }, { dataSources: { organizations } }) => {
-            return organizations.removeMember(org_id, user_id) as any as Promise<boolean>;
+        removeMember: async (_, { org_id, user_id }, { dataSources: { organizations, users } }) => {
+            const removed = await organizations.removeMember(org_id, user_id);
+            if (removed) {
+                const deleted = await users.deleteIfGhost(user_id);
+                if (!deleted) await users.addOrganizationToUser(user_id, "");
+            }
+            return removed;
         },
         updateMemberRole: async (_, { org_id, user_id, orgRole }, { dataSources: { organizations } }) => {
             return organizations.updateMemberRole(org_id, user_id, orgRole) as any as Promise<OrganizationMember | null>;
+        },
+        updateMemberIsPlayer: async (_, { org_id, user_id, isPlayer }, { dataSources: { organizations } }) => {
+            return organizations.updateMemberIsPlayer(org_id, user_id, isPlayer) as any as Promise<OrganizationMember | null>;
         },
         setCoreTeam: async (_, { org_id, user_ids }, { dataSources: { organizations } }) => {
             return organizations.setCoreTeam(org_id, user_ids) as any as Promise<Organization | null>;

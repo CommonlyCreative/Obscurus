@@ -90,6 +90,11 @@ export type CreateOrganizationInput = {
   slug: Scalars['String']['input'];
 };
 
+export type CreatePlaceholderPlayerInput = {
+  email: Scalars['String']['input'];
+  name: Scalars['String']['input'];
+};
+
 export type CreateScrimmageInput = {
   bestOf?: InputMaybe<BestOf>;
   hostOrg_id?: InputMaybe<Scalars['String']['input']>;
@@ -243,6 +248,7 @@ export type Mutation = {
   cancelSubstituteRequest?: Maybe<SubstituteRequest>;
   createCustomer?: Maybe<Customer>;
   createOrganization?: Maybe<Organization>;
+  createPlaceholderPlayer?: Maybe<OrganizationMember>;
   createScrimmage?: Maybe<Scrimmage>;
   createSubstituteRequest?: Maybe<SubstituteRequest>;
   createUser?: Maybe<User>;
@@ -265,7 +271,6 @@ export type Mutation = {
   reviewOrgRequest?: Maybe<OrgRequest>;
   selectSubstitute?: Maybe<SubstituteRequest>;
   setCoreTeam?: Maybe<Organization>;
-  setOnlineStatus?: Maybe<User>;
   setOpponentRoster?: Maybe<Scrimmage>;
   setPartyCode?: Maybe<Scrimmage>;
   settleWagers: Array<Wager>;
@@ -275,6 +280,7 @@ export type Mutation = {
   transferOwnership?: Maybe<Organization>;
   unready?: Maybe<Scrimmage>;
   updateAvailabilityBlocks?: Maybe<Organization>;
+  updateMemberIsPlayer?: Maybe<OrganizationMember>;
   updateMemberRole?: Maybe<OrganizationMember>;
   updateOrganization?: Maybe<Organization>;
   updateRosterSlot?: Maybe<Scrimmage>;
@@ -368,6 +374,13 @@ export type MutationCreateCustomerArgs = {
 export type MutationCreateOrganizationArgs = {
   input: CreateOrganizationInput;
   owner_id: Scalars['String']['input'];
+};
+
+
+export type MutationCreatePlaceholderPlayerArgs = {
+  input: CreatePlaceholderPlayerInput;
+  orgRole: OrgRole;
+  org_id: Scalars['String']['input'];
 };
 
 
@@ -495,12 +508,6 @@ export type MutationSetCoreTeamArgs = {
 };
 
 
-export type MutationSetOnlineStatusArgs = {
-  online: Scalars['Boolean']['input'];
-  user_id: Scalars['String']['input'];
-};
-
-
 export type MutationSetOpponentRosterArgs = {
   input: SetOpponentRosterInput;
 };
@@ -551,6 +558,13 @@ export type MutationUnreadyArgs = {
 export type MutationUpdateAvailabilityBlocksArgs = {
   blocks: Array<AvailabilityBlockInput>;
   org_id: Scalars['String']['input'];
+};
+
+
+export type MutationUpdateMemberIsPlayerArgs = {
+  isPlayer: Scalars['Boolean']['input'];
+  org_id: Scalars['String']['input'];
+  user_id: Scalars['String']['input'];
 };
 
 
@@ -662,6 +676,7 @@ export type Organization = {
 
 export type OrganizationMember = {
   __typename?: 'OrganizationMember';
+  isPlayer: Scalars['Boolean']['output'];
   joinedAt: Scalars['Timestamp']['output'];
   orgRole: OrgRole;
   status: OrgMemberStatus;
@@ -1220,7 +1235,7 @@ export type UpdateUserInput = {
   bio?: InputMaybe<Scalars['String']['input']>;
   heroes?: InputMaybe<Array<Scalars['Int']['input']>>;
   mmr?: InputMaybe<Scalars['Int']['input']>;
-  online?: InputMaybe<Scalars['Boolean']['input']>;
+  name?: InputMaybe<Scalars['String']['input']>;
   role?: InputMaybe<Role>;
   steam?: InputMaybe<SteamInput>;
   verified?: InputMaybe<Scalars['Boolean']['input']>;
@@ -1356,6 +1371,7 @@ export type ResolversTypes = ResolversObject<{
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   CardFunding: CardFunding;
   CreateOrganizationInput: CreateOrganizationInput;
+  CreatePlaceholderPlayerInput: CreatePlaceholderPlayerInput;
   CreateScrimmageInput: CreateScrimmageInput;
   CreditPurchase: ResolverTypeWrapper<CreditPurchase>;
   CreditTransaction: ResolverTypeWrapper<CreditTransaction>;
@@ -1441,6 +1457,7 @@ export type ResolversParentTypes = ResolversObject<{
   BalanceInput: BalanceInput;
   Boolean: Scalars['Boolean']['output'];
   CreateOrganizationInput: CreateOrganizationInput;
+  CreatePlaceholderPlayerInput: CreatePlaceholderPlayerInput;
   CreateScrimmageInput: CreateScrimmageInput;
   CreditPurchase: CreditPurchase;
   CreditTransaction: CreditTransaction;
@@ -1590,6 +1607,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   cancelSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCancelSubstituteRequestArgs, 'request_id'>>;
   createCustomer?: Resolver<Maybe<ResolversTypes['Customer']>, ParentType, ContextType, RequireFields<MutationCreateCustomerArgs, 'input'>>;
   createOrganization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationCreateOrganizationArgs, 'input' | 'owner_id'>>;
+  createPlaceholderPlayer?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationCreatePlaceholderPlayerArgs, 'input' | 'orgRole' | 'org_id'>>;
   createScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCreateScrimmageArgs, 'input'>>;
   createSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCreateSubstituteRequestArgs, 'input'>>;
   createUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreateUserArgs, 'input'>>;
@@ -1612,7 +1630,6 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   reviewOrgRequest?: Resolver<Maybe<ResolversTypes['OrgRequest']>, ParentType, ContextType, RequireFields<MutationReviewOrgRequestArgs, 'request_id' | 'status'>>;
   selectSubstitute?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationSelectSubstituteArgs, 'request_id' | 'user_id'>>;
   setCoreTeam?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationSetCoreTeamArgs, 'org_id' | 'user_ids'>>;
-  setOnlineStatus?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationSetOnlineStatusArgs, 'online' | 'user_id'>>;
   setOpponentRoster?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetOpponentRosterArgs, 'input'>>;
   setPartyCode?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetPartyCodeArgs, 'partyCode' | 'scrimmage_id'>>;
   settleWagers?: Resolver<Array<ResolversTypes['Wager']>, ParentType, ContextType, RequireFields<MutationSettleWagersArgs, 'scrimmage_id'>>;
@@ -1622,6 +1639,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   transferOwnership?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationTransferOwnershipArgs, 'new_owner_id' | 'org_id'>>;
   unready?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationUnreadyArgs, 'scrimmage_id' | 'side'>>;
   updateAvailabilityBlocks?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationUpdateAvailabilityBlocksArgs, 'blocks' | 'org_id'>>;
+  updateMemberIsPlayer?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationUpdateMemberIsPlayerArgs, 'isPlayer' | 'org_id' | 'user_id'>>;
   updateMemberRole?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationUpdateMemberRoleArgs, 'orgRole' | 'org_id' | 'user_id'>>;
   updateOrganization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationUpdateOrganizationArgs, 'input' | 'org_id'>>;
   updateRosterSlot?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationUpdateRosterSlotArgs, 'input'>>;
@@ -1670,6 +1688,7 @@ export type OrganizationResolvers<ContextType = Context, ParentType extends Reso
 }>;
 
 export type OrganizationMemberResolvers<ContextType = Context, ParentType extends ResolversParentTypes['OrganizationMember'] = ResolversParentTypes['OrganizationMember']> = ResolversObject<{
+  isPlayer?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   joinedAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   orgRole?: Resolver<ResolversTypes['OrgRole'], ParentType, ContextType>;
   status?: Resolver<ResolversTypes['OrgMemberStatus'], ParentType, ContextType>;
