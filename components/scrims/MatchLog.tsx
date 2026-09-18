@@ -187,8 +187,6 @@ export function MatchLog({
         });
     }
 
-    console.log('ANOTHER',canViewParyCode, isHostLeader, codeEditing)
-
     return (
         <div className="space-y-4">
             {canViewParyCode ?
