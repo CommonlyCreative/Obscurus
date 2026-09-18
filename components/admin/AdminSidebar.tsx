@@ -27,6 +27,14 @@ function BuildingIcon() {
     );
 }
 
+function LayersIcon() {
+    return (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m12.83 2.18 8.42 4.6a.5.5 0 0 1 0 .88l-8.42 4.6a2 2 0 0 1-1.66 0L2.75 7.66a.5.5 0 0 1 0-.88l8.42-4.6a2 2 0 0 1 1.66 0Z" /><path d="m22 12.5-8.58 4.6a2 2 0 0 1-1.66 0L2 12.5" /><path d="m22 17.5-8.58 4.6a2 2 0 0 1-1.66 0L2 17.5" />
+        </svg>
+    );
+}
+
 function UsersIcon() {
     return (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -62,6 +70,7 @@ function ChatIcon() {
 const NAV_ITEMS: NavItem[] = [
     { href: "/admin",              label: "Analytics",     roles: ["ADMIN", "MODERATOR"],                   icon: <BarChartIcon /> },
     { href: "/admin/org-requests", label: "Org Requests",  roles: ["ADMIN", "MODERATOR"],                   icon: <BuildingIcon /> },
+    { href: "/admin/organizations", label: "Organizations", roles: ["ADMIN", "MODERATOR"],                  icon: <LayersIcon /> },
     { href: "/admin/users",        label: "Users",         roles: ["ADMIN", "MODERATOR", "SUPPORT"],        icon: <UsersIcon /> },
     { href: "/admin/scrimmages",   label: "Scrimmages",    roles: ["ADMIN", "MODERATOR", "SUPPORT"],        icon: <SwordsIcon /> },
     { href: "/admin/disputes",     label: "Disputes",      roles: ["ADMIN", "MODERATOR", "SUPPORT"],        icon: <ScaleIcon /> },

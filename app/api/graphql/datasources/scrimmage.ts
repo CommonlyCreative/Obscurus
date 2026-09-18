@@ -175,6 +175,46 @@ export class ScrimmageDataSource {
         return scrimmage;
     }
 
+    // Admin-only: real org (host) vs. artificial org (opponent), scheduled directly
+    // at SCHEDULED — no invite/accept step, since the opponent has no real leader to
+    // accept on its behalf. The opponent roster is resolved by the caller (resolver)
+    // from the artificial org's roster before this is called.
+    async createArtificialScrimmage(input: {
+        hostOrg_id: string;
+        host_id: string;
+        hostTeam: string[];
+        opponentOrg_id: string;
+        opponentTeam: string[];
+        opponentLeader: string;
+        scheduledAt: number;
+        bestOf?: BestOf;
+        note?: string;
+    }): Promise<DBScrimmage> {
+        const scrimmage: DBScrimmage = {
+            _id: new ObjectId(),
+            host: input.host_id,
+            hostOrg: input.hostOrg_id,
+            hostTeam: { leader: input.host_id, members: input.hostTeam },
+            opponentOrg: input.opponentOrg_id,
+            opponentTeam: { leader: input.opponentLeader, members: input.opponentTeam },
+            region: "NA",
+            status: ScrimmageStatus.Scheduled,
+            isPrivate: true,
+            wagerAmount: 0,
+            bestOf: input.bestOf ?? BestOf.One,
+            note: input.note,
+            scheduledAt: input.scheduledAt,
+            readyHost: false,
+            readyOpponent: true,
+            matches: [],
+            invitations: [],
+            createdAt: now(),
+            updatedAt: now(),
+        };
+        await this.collection.insertOne(scrimmage);
+        return scrimmage;
+    }
+
     // ── Generic update helper ─────────────────────────────────────────────────
 
     private async patch(

@@ -127,6 +127,12 @@ function EditDataForm({ user, onDone }: { user: UserDetail; onDone: () => void }
         credits: user.balance.credits,
         pending: user.balance.pending,
         winnings: user.balance.winnings,
+        email: user.email,
+        verified: user.verified,
+        blockInvites: user.blockInvites,
+        steamId: user.steam?.id ?? "",
+        steamUsername: user.steam?.username ?? "",
+        steamAvatar: user.steam?.avatar ?? "",
     });
     const [pending, start] = useTransition();
     const [error, setError] = useState<string | null>(null);
@@ -197,6 +203,56 @@ function EditDataForm({ user, onDone }: { user: UserDetail; onDone: () => void }
                     <input type="number" value={form.winnings ?? 0} onChange={(e) => patch("winnings", Number(e.target.value))} className={numInp} />
                 </div>
             </div>
+
+            {/* Full-record fields — unverified (unclaimed placeholder) users only */}
+            {!user.verified && (
+                <div className="border-t border-edge pt-3 space-y-3">
+                    <p className="text-[10px] text-primary uppercase tracking-wide">
+                        Unverified — full record editable
+                    </p>
+                    <div>
+                        <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Email</label>
+                        <input value={form.email ?? ""} onChange={(e) => patch("email", e.target.value)} className={inp} />
+                        <p className="text-[10px] text-muted mt-1">
+                            Must match the email the real player will sign in with via Discord to claim this profile.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-1.5 text-xs text-dimmed cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={form.verified ?? false}
+                                onChange={(e) => patch("verified", e.target.checked)}
+                                className="accent-primary"
+                            />
+                            Verified
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-dimmed cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={form.blockInvites ?? false}
+                                onChange={(e) => patch("blockInvites", e.target.checked)}
+                                className="accent-primary"
+                            />
+                            Block Invites
+                        </label>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                        <div>
+                            <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Steam ID</label>
+                            <input value={form.steamId ?? ""} onChange={(e) => patch("steamId", e.target.value)} className={inp} />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Steam Username</label>
+                            <input value={form.steamUsername ?? ""} onChange={(e) => patch("steamUsername", e.target.value)} className={inp} />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">Steam Avatar URL</label>
+                            <input value={form.steamAvatar ?? ""} onChange={(e) => patch("steamAvatar", e.target.value)} className={inp} />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {error && (
                 <p className="text-xs text-danger bg-danger/10 border border-danger/20 rounded px-3 py-2">{error}</p>

@@ -8,7 +8,7 @@ import { Notification, Role } from "@/app/api/graphql/server";
 import { revalidatePath } from "next/cache";
 import { grafbase } from "@/lib/database/grafbase";
 import { graphql } from "@/app/api/graphql/types";
-import { NotificationType, OrgRequestStatus, SendNotificationMutation } from "@/app/api/graphql/types/graphql";
+import { BestOf, Day, NotificationType, OrgRequestStatus, OrgRole, SendNotificationMutation } from "@/app/api/graphql/types/graphql";
 import { SendNotificationM } from "@/lib/shared-graphs";
 import { getGoogleClient } from "@/lib/google";
 import { google } from "googleapis";
@@ -43,6 +43,101 @@ const CreateOrganizationMutation = graphql(`
       _id
       name
       slug
+    }
+  }
+`);
+
+const CreatePlaceholderUserMutation = graphql(`
+  mutation AdminCreatePlaceholderUser($input: CreatePlaceholderPlayerInput!) {
+    createPlaceholderUser(input: $input) {
+      _id
+      name
+    }
+  }
+`);
+
+const CreatePlaceholderPlayerMutation = graphql(`
+  mutation AdminCreatePlaceholderPlayer($org_id: String!, $orgRole: OrgRole!, $input: CreatePlaceholderPlayerInput!) {
+    createPlaceholderPlayer(org_id: $org_id, orgRole: $orgRole, input: $input) {
+      user {
+        _id
+        name
+      }
+      orgRole
+    }
+  }
+`);
+
+const AdminOrganizationsQuery = graphql(`
+  query AdminOrganizations {
+    getOrganizations {
+      _id
+      name
+      slug
+      description
+      owner { _id name }
+      members {
+        user { _id name }
+        orgRole
+        isPlayer
+        status
+        joinedAt
+      }
+      coreTeam { _id name }
+      blocks {
+        day
+        timesheets { startTime endTime }
+      }
+      artificial
+      createdAt
+      updatedAt
+    }
+  }
+`);
+
+const AdminRenameOrganizationMutation = graphql(`
+  mutation AdminRenameOrganization($org_id: String!, $input: UpdateOrganizationInput!) {
+    updateOrganization(org_id: $org_id, input: $input) {
+      _id
+      name
+    }
+  }
+`);
+
+const AdminRemoveOrgMemberMutation = graphql(`
+  mutation AdminRemoveOrgMember($org_id: String!, $user_id: String!) {
+    removeMember(org_id: $org_id, user_id: $user_id)
+  }
+`);
+
+const AdminDisbandOrganizationMutation = graphql(`
+  mutation AdminDisbandOrganization($org_id: String!) {
+    deleteOrganization(org_id: $org_id)
+  }
+`);
+
+const AdminSetCoreTeamMutation = graphql(`
+  mutation AdminSetCoreTeam($org_id: String!, $user_ids: [String!]!) {
+    setCoreTeam(org_id: $org_id, user_ids: $user_ids) {
+      _id
+    }
+  }
+`);
+
+const AdminUpdateAvailabilityBlocksMutation = graphql(`
+  mutation AdminUpdateAvailabilityBlocks($org_id: String!, $blocks: [AvailabilityBlockInput!]!) {
+    updateAvailabilityBlocks(org_id: $org_id, blocks: $blocks) {
+      _id
+    }
+  }
+`);
+
+const CreateArtificialScrimmageMutation = graphql(`
+  mutation AdminCreateArtificialScrimmage($input: CreateArtificialScrimmageInput!) {
+    createArtificialScrimmage(input: $input) {
+      _id
+      status
+      scheduledAt
     }
   }
 `);
@@ -321,11 +416,198 @@ export async function reviewOrgRequestAdminAction(
         const req = result.reviewOrgRequest;
         await grafbase.request(CreateOrganizationMutation, {
             owner_id: req.user._id,
-            input: { name: req.name, slug: req.slug },
+            input: { name: req.name, slug: req.slug, artificial: false },
         });
     }
 
     revalidatePath("/admin/org-requests");
+}
+
+// Admin-only: create an organization outright with a placeholder (unverified) owner,
+// bypassing the org-request flow entirely. Useful for admin setup/support/testing —
+// the placeholder owner can later be claimed by a real user via Discord sign-in with
+// a matching email, same as a manager-created placeholder player.
+export type AdminCreatedOrg = { orgId: string; slug: string; ownerId: string; ownerName: string };
+
+export async function adminCreateOrganizationAction(
+    owner: { name: string; email: string },
+    org: { name: string; slug: string },
+): Promise<AdminCreatedOrg> {
+    await requireRole([Role.Admin]);
+
+    const { createPlaceholderUser: newOwner } = await grafbase.request(CreatePlaceholderUserMutation, {
+        input: { name: owner.name.trim(), email: owner.email.trim() },
+    });
+    if (!newOwner) throw new Error("Failed to create placeholder owner");
+
+    const { createOrganization: createdOrg } = await grafbase.request(CreateOrganizationMutation, {
+        owner_id: newOwner._id,
+        input: { name: org.name.trim(), slug: org.slug.trim().toLowerCase(), artificial: true },
+    });
+    if (!createdOrg) throw new Error("Failed to create organization");
+
+    revalidatePath("/admin/org-requests");
+    return { orgId: createdOrg._id, slug: createdOrg.slug, ownerId: newOwner._id, ownerName: newOwner.name };
+}
+
+export type AdminCreatedMember = { _id: string; name: string; orgRole: OrgRole };
+
+export async function adminAddPlaceholderMemberAction(
+    orgId: string,
+    orgRole: OrgRole,
+    member: { name: string; email: string },
+): Promise<AdminCreatedMember> {
+    await requireRole([Role.Admin]);
+
+    const { createPlaceholderPlayer: created } = await grafbase.request(CreatePlaceholderPlayerMutation, {
+        org_id: orgId,
+        orgRole,
+        input: { name: member.name.trim(), email: member.email.trim() },
+    });
+    if (!created) throw new Error("Failed to add placeholder member");
+
+    revalidatePath("/admin/org-requests");
+    revalidatePath("/admin/organizations");
+    return { _id: created.user._id, name: created.user.name, orgRole: created.orgRole };
+}
+
+// ─── Organizations ────────────────────────────────────────────────────────
+
+export type AdminOrgMember = {
+    _id: string;
+    name: string;
+    orgRole: string;
+    isPlayer: boolean;
+    status: string;
+    joinedAt: number;
+};
+
+export type AdminOrgBlock = {
+    day: Day;
+    timesheets: Array<{ startTime: number; endTime: number }> | null;
+};
+
+export type AdminOrgRow = {
+    _id: string;
+    name: string;
+    slug: string;
+    description: string | null;
+    ownerId: string;
+    ownerName: string;
+    members: AdminOrgMember[];
+    coreTeamIds: string[];
+    memberCount: number;
+    artificial: boolean;
+    blocks: AdminOrgBlock[];
+    createdAt: number;
+    updatedAt: number;
+};
+
+export async function getOrganizationsAdminAction(): Promise<AdminOrgRow[]> {
+    await requireRole([Role.Admin, Role.Moderator]);
+    const { getOrganizations } = await grafbase.request(AdminOrganizationsQuery);
+    return (getOrganizations ?? [])
+        .map((org) => ({
+            _id: org._id,
+            name: org.name,
+            slug: org.slug,
+            description: org.description ?? null,
+            ownerId: org.owner._id,
+            ownerName: org.owner.name,
+            members: org.members.map((m) => ({
+                _id: m.user._id,
+                name: m.user.name,
+                orgRole: m.orgRole,
+                isPlayer: m.isPlayer,
+                status: m.status,
+                joinedAt: m.joinedAt,
+            })),
+            coreTeamIds: org.coreTeam.map((u) => u._id),
+            memberCount: org.members.filter((m) => m.status === "ACTIVE").length,
+            artificial: org.artificial,
+            blocks: org.blocks.map((b) => ({
+                day: b.day,
+                timesheets: b.timesheets?.map((t) => ({ startTime: t.startTime, endTime: t.endTime })) ?? null,
+            })),
+            createdAt: org.createdAt,
+            updatedAt: org.updatedAt,
+        }))
+        .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+export async function adminRenameOrganizationAction(orgId: string, name: string): Promise<void> {
+    await requireRole([Role.Admin]);
+    if (!name.trim()) throw new Error("Name is required");
+    await grafbase.request(AdminRenameOrganizationMutation, {
+        org_id: orgId,
+        input: { name: name.trim() },
+    });
+    revalidatePath("/admin/organizations");
+}
+
+export async function adminRemoveOrgMemberAction(orgId: string, userId: string): Promise<void> {
+    await requireRole([Role.Admin]);
+    await grafbase.request(AdminRemoveOrgMemberMutation, { org_id: orgId, user_id: userId });
+    revalidatePath("/admin/organizations");
+}
+
+export async function adminDisbandOrganizationAction(orgId: string): Promise<void> {
+    await requireRole([Role.Admin]);
+    await grafbase.request(AdminDisbandOrganizationMutation, { org_id: orgId });
+    revalidatePath("/admin/organizations");
+}
+
+export async function adminSetCoreTeamAction(orgId: string, userIds: string[]): Promise<void> {
+    await requireRole([Role.Admin]);
+    await grafbase.request(AdminSetCoreTeamMutation, { org_id: orgId, user_ids: userIds });
+    revalidatePath("/admin/organizations");
+}
+
+export async function adminUpdateAvailabilityBlocksAction(
+    orgId: string,
+    _slug: string,
+    blocks: Array<{ day: Day; timesheets: Array<{ startTime: number; endTime: number }> }>,
+): Promise<void> {
+    await requireRole([Role.Admin]);
+    await grafbase.request(AdminUpdateAvailabilityBlocksMutation, { org_id: orgId, blocks });
+    revalidatePath("/admin/organizations");
+}
+
+// Admin-only: schedule a real org (host) against an artificial org (opponent) at a
+// specific time. Skips the normal challenge/accept flow — the opponent's roster is
+// derived server-side from the artificial org's roster (see resolver). Once
+// scheduledAt arrives, the socket process auto-readies the artificial side; the
+// real host still readies up manually as usual.
+export type AdminCreatedScrim = { _id: string; status: string; scheduledAt: number | null };
+
+export async function adminCreateArtificialScrimAction(input: {
+    hostOrgId: string;
+    hostId: string;
+    hostTeam: string[];
+    opponentTeam: string[];
+    opponentOrgId: string;
+    scheduledAt: number;
+    bestOf?: BestOf;
+    note?: string;
+}): Promise<AdminCreatedScrim> {
+    await requireRole([Role.Admin]);
+
+    const { createArtificialScrimmage: created } = await grafbase.request(CreateArtificialScrimmageMutation, {
+        input: {
+            hostOrg_id: input.hostOrgId,
+            host_id: input.hostId,
+            hostTeam: input.hostTeam,
+            opponentTeam: input.opponentTeam,
+            opponentOrg_id: input.opponentOrgId,
+            scheduledAt: input.scheduledAt,
+            bestOf: input.bestOf,
+            note: input.note,
+        },
+    });
+    if (!created) throw new Error("Failed to schedule scrimmage");
+
+    revalidatePath("/admin/scrimmages");
+    return { _id: created._id, status: created.status, scheduledAt: created.scheduledAt ?? null };
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────
@@ -666,6 +948,9 @@ export type UserDetail = {
     balance: { credits: number; pending: number; winnings: number };
     online: boolean;
     organization: string;
+    verified: boolean;
+    blockInvites: boolean;
+    steam: { id: string; username: string; avatar: string } | null;
     createdAt: number;
 };
 
@@ -690,6 +975,9 @@ export async function getUserDetailAction(userId: string): Promise<UserDetail | 
         balance: d.balance ?? { credits: 0, pending: 0, winnings: 0 },
         online,
         organization: d.organization ?? "",
+        verified: d.verified ?? false,
+        blockInvites: d.blockInvites ?? false,
+        steam: d.steam ? { id: d.steam.id ?? "", username: d.steam.username ?? "", avatar: d.steam.avatar ?? "" } : null,
         createdAt: d.createdAt ?? 0,
     };
 }
@@ -772,6 +1060,14 @@ export type UserEditableData = {
     credits?: number;
     pending?: number;
     winnings?: number;
+    // Only applied when the target user is unverified — see updateUserDataAction.
+    // Verified users keep the current restricted field set above.
+    email?: string;
+    verified?: boolean;
+    blockInvites?: boolean;
+    steamId?: string;
+    steamUsername?: string;
+    steamAvatar?: string;
 };
 
 export async function updateUserDataAction(
@@ -779,6 +1075,11 @@ export async function updateUserDataAction(
     data: UserEditableData,
 ): Promise<void> {
     await requireRole([Role.Admin]);
+    const target = await db.collection("user").findOne({ _id: new ObjectId(userId) });
+    if (!target) throw new Error("User not found");
+    const t = target as any;
+    const isVerified = t.verified === true;
+
     const update: Record<string, unknown> = { updatedAt: Date.now() };
     if (data.name !== undefined) update.name = data.name.trim();
     if (data.bio !== undefined) update.bio = data.bio.trim();
@@ -787,6 +1088,29 @@ export async function updateUserDataAction(
     if (data.credits !== undefined) update["balance.credits"] = Number(data.credits);
     if (data.pending !== undefined) update["balance.pending"] = Number(data.pending);
     if (data.winnings !== undefined) update["balance.winnings"] = Number(data.winnings);
+
+    // Full-record editing is only allowed for unverified (placeholder / unclaimed) users —
+    // a real, verified person's account shouldn't have things like their email or steam
+    // link silently rewritten from the admin panel.
+    if (!isVerified) {
+        if (data.email !== undefined) {
+            const email = data.email.trim().toLowerCase();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Enter a valid email address");
+            const existing = await db.collection("user").findOne({ email, _id: { $ne: new ObjectId(userId) } });
+            if (existing) throw new Error("A user with this email already exists");
+            update.email = email;
+        }
+        if (data.verified !== undefined) update.verified = data.verified;
+        if (data.blockInvites !== undefined) update.blockInvites = data.blockInvites;
+        if (data.steamId !== undefined || data.steamUsername !== undefined || data.steamAvatar !== undefined) {
+            update.steam = {
+                id: data.steamId ?? t.steam?.id ?? "",
+                username: data.steamUsername ?? t.steam?.username ?? "",
+                avatar: data.steamAvatar ?? t.steam?.avatar ?? "",
+            };
+        }
+    }
+
     await db
         .collection("user")
         .updateOne({ _id: new ObjectId(userId) }, { $set: update });

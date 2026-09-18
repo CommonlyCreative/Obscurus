@@ -172,6 +172,23 @@ enum ApplicantStatus {
     REJECTED
 }
 
+# Admin-only: directly schedules a real org (host) against an artificial
+# (admin-created) org (opponent), skipping the invite/accept flow entirely since
+# there's no real person on the artificial side to accept a challenge. The
+# opponent's 6-player roster is auto-derived server-side from that org's core
+# team / active roster. Rule: the host must be a real org and the opponent must
+# be an artificial org — never the other way around.
+input CreateArtificialScrimmageInput {
+    hostOrg_id: String!
+    host_id: String!             # Real user leading the host team; must be an active member of hostOrg
+    hostTeam: [String!]!         # Exactly 6 user IDs
+    opponentTeam: [String!]!         # Exactly 6 user IDs
+    opponentOrg_id: String!      # Must be an artificial organization
+    scheduledAt: Timestamp!
+    bestOf: BestOf
+    note: String
+}
+
 input CreateScrimmageInput {
     hostOrg_id: String
     team: [String!]!             # Host roster: exactly 6 user IDs
@@ -253,6 +270,7 @@ extend type Query {
 
 extend type Mutation {
     createScrimmage(input: CreateScrimmageInput!): Scrimmage
+    createArtificialScrimmage(input: CreateArtificialScrimmageInput!): Scrimmage
     updateScrimmage(scrimmage_id: String!, input: UpdateScrimmageInput!): Scrimmage
     cancelScrimmage(scrimmage_id: String!): Scrimmage
 

@@ -10,6 +10,7 @@ const SearchPageQuery = graphql(`
             name
             role
             online
+            verified
             steam { id }
             stats { rank { name } division mmr }
             heroes

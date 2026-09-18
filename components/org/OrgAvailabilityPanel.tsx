@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { Pencil, Check, X, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Day } from "@/app/api/graphql/types/graphql";
-import { updateAvailabilityBlocksAction } from "@/app/org/[slug]/actions";
 
 const DAY_ORDER: Day[] = [
     Day.Sunday, Day.Monday, Day.Tuesday, Day.Wednesday,
@@ -156,9 +155,14 @@ interface Props {
     slug: string;
     isManager: boolean;
     blocks: AvailabilityBlockProp[] | null | undefined;
+    onSave: (
+        orgId: string,
+        slug: string,
+        blocks: Array<{ day: Day; timesheets: Array<{ startTime: number; endTime: number }> }>
+    ) => Promise<unknown>;
 }
 
-export function OrgAvailabilityPanel({ orgId, slug, isManager, blocks }: Props) {
+export function OrgAvailabilityPanel({ orgId, slug, isManager, blocks, onSave }: Props) {
     const [saved, setSaved] = useState<Record<Day, BlockSlot>>(() => makeSlots(blocks));
     const [draft, setDraft] = useState<Record<Day, BlockSlot>>(saved);
     const [isEditing, setIsEditing] = useState(false);
@@ -213,7 +217,7 @@ export function OrgAvailabilityPanel({ orgId, slug, isManager, blocks }: Props) 
         setErrors([]);
         startTransition(async () => {
             try {
-                await updateAvailabilityBlocksAction(orgId, slug, updates);
+                await onSave(orgId, slug, updates);
                 setSaved(slotsFromUpdates(updates));
                 setIsEditing(false);
             } catch {

@@ -27,7 +27,7 @@ async function SearchContent() {
         getHeroes(),
     ]);
 
-    const users: SearchPageQuery["getUsers"] = data.getUsers ?? [];
+    const users: SearchPageQuery["getUsers"] = (data.getUsers ?? []).filter(u => u.verified);
     const orgs: SearchPageQuery["getOrganizations"] = data.getOrganizations ?? [];
     const scrimmages: SearchPageQuery["getScrimmages"] = data.getScrimmages ?? [];
 

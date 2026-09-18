@@ -3,13 +3,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/database/auth";
 import { Role } from "@/app/api/graphql/server";
-import { getScrimmagesForAdminAction, getOrganizationsAdminAction } from "../actions";
-import { ScrimsPanel } from "@/components/admin/ScrimsPanel";
-import { AdminScheduleMatchPanel } from "@/components/admin/AdminScheduleMatchPanel";
+import { getOrganizationsAdminAction } from "../actions";
+import { OrganizationsPanel } from "@/components/admin/OrganizationsPanel";
+import { AdminCreateOrgPanel } from "@/components/admin/AdminCreateOrgPanel";
 
-const ALLOWED_ROLES: string[] = [Role.Admin, Role.Moderator, Role.Support];
+const ALLOWED_ROLES: string[] = [Role.Admin, Role.Moderator];
 
-export default function AdminScrimmagesPage() {
+export default function AdminOrganizationsPage() {
     const headersPromise = headers();
 
     return (
@@ -19,17 +19,17 @@ export default function AdminScrimmagesPage() {
                     <div className="h-px w-6 bg-primary" />
                     <span className="text-primary text-xs font-semibold tracking-[0.2em] uppercase">Admin</span>
                 </div>
-                <h1 className="text-3xl font-black uppercase text-foreground">Scrimmages</h1>
-                <p className="text-sm text-dimmed mt-1">Monitor and manage active scrimmages.</p>
+                <h1 className="text-3xl font-black uppercase text-foreground">Organizations</h1>
+                <p className="text-sm text-dimmed mt-1">Browse and manage every organization on the platform.</p>
             </div>
             <Suspense fallback={<AdminTableSkeleton />}>
-                <ScrimmagesData headersPromise={headersPromise} />
+                <OrganizationsData headersPromise={headersPromise} />
             </Suspense>
         </div>
     );
 }
 
-async function ScrimmagesData({
+async function OrganizationsData({
     headersPromise,
 }: {
     headersPromise: ReturnType<typeof headers>;
@@ -39,13 +39,11 @@ async function ScrimmagesData({
     const role = (session?.user as { role?: string } | undefined)?.role ?? "";
     if (!ALLOWED_ROLES.includes(role)) redirect("/admin");
 
-    const scrims = await getScrimmagesForAdminAction();
-    const organizations = role === "ADMIN" ? await getOrganizationsAdminAction() : null;
-
+    const organizations = await getOrganizationsAdminAction();
     return (
         <div className="flex flex-col gap-4">
-            {organizations && <AdminScheduleMatchPanel organizations={organizations} />}
-            <ScrimsPanel scrims={scrims} adminRole={role} />
+            {role === "ADMIN" && <AdminCreateOrgPanel />}
+            <OrganizationsPanel organizations={organizations} adminRole={role} />
         </div>
     );
 }
@@ -53,7 +51,7 @@ async function ScrimmagesData({
 function AdminTableSkeleton() {
     return (
         <div className="animate-pulse space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
+            {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="h-14 bg-surface-2 rounded-lg border border-edge" />
             ))}
         </div>

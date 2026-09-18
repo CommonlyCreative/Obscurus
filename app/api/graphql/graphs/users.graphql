@@ -114,4 +114,8 @@ extend type Mutation {
     createUser(input: UserInput!): User
     updateUser(user_id: String!, input: UpdateUserInput!): User
     createCustomer(input: CustomerInput!): Customer
+    # Admin-only: a bare unverified user not attached to any organization.
+    # Reuses CreatePlaceholderPlayerInput (see organization.graphql) since it's the
+    # same shape/claiming semantics as a manager-created placeholder player.
+    createPlaceholderUser(input: CreatePlaceholderPlayerInput!): User
 }

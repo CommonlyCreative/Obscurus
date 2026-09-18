@@ -20,6 +20,8 @@ type Organization {
     members: [OrganizationMember!]!     # All active + invited members
     coreTeam: [User!]!                  # Up to 6 designated starting players
     blocks: [AvailabilityBlock!]!
+    artificial: Boolean!                # true = created outright by an admin (no real submitter);
+                                         # false = created from an approved org request (a real user's org)
     createdAt: Timestamp!
     updatedAt: Timestamp!
 }
@@ -76,6 +78,7 @@ input CreateOrganizationInput {
     slug: String!
     description: String
     logo: String
+    artificial: Boolean          # Admin-only; omit/false for real orgs — see Organization.artificial
 }
 
 # A manager-created placeholder player — not yet signed up.

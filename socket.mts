@@ -350,6 +350,89 @@ function setupScrimSocket(_io: Server, socket: Socket) {
     });
 }
 
+// ─── Artificial opponent auto-ready ────────────────────────────────────────
+// Artificial (admin-created placeholder) opponent orgs have no real manager to
+// click "Ready" — once a match's scheduledAt arrives, ready that side up
+// automatically via the same readyUp mutation a real leader would call, so the
+// real host isn't left waiting indefinitely on a team that can never respond.
+// The host side is untouched — they still ready up manually as normal.
+
+interface DueScrimmage {
+    _id: string;
+    scheduledAt: number | null;
+    readyOpponent: boolean;
+    opponentOrg?: { artificial: boolean } | null;
+}
+
+// Plain fetch instead of the shared `grafbase` GraphQLClient (lib/database/grafbase.ts):
+// this standalone process is loaded via ts-node/esm, which transpiles that module (and
+// its graphql-request dependency) to CommonJS, and Node's CJS/ESM interop here doesn't
+// reliably expose named exports — importing it crashed the whole socket process on
+// startup. A raw fetch has no such interop to trip over.
+async function graphqlRequest<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    const res = await fetch(`${CLIENT}/api/graphql`, {
+        method: "POST",
+        headers: {
+            "content-type": "application/json",
+            authorization: String(process.env.AUTHORIZATION),
+        },
+        body: JSON.stringify({ query, variables }),
+    });
+    const json = await res.json() as { data?: T; errors?: Array<{ message: string }> };
+    if (json.errors?.length) throw new Error(json.errors[0].message);
+    if (!json.data) throw new Error("GraphQL response had no data");
+    return json.data;
+}
+
+const GET_DUE_SCRIMMAGES = `
+  query SocketDueScrimmages {
+    getScrimmages(status: SCHEDULED) {
+      _id
+      scheduledAt
+      readyOpponent
+      opponentOrg { artificial }
+    }
+  }
+`;
+
+const READY_UP_OPPONENT = `
+  mutation SocketAutoReadyOpponent($scrimmage_id: String!) {
+    readyUp(scrimmage_id: $scrimmage_id, side: OPPONENT) {
+      _id
+    }
+  }
+`;
+
+const ARTIFICIAL_READY_CHECK_INTERVAL_MS = 30_000;
+
+async function autoReadyArtificialOpponents() {
+    const now = Date.now();
+    let due: DueScrimmage[];
+    try {
+        const result = await graphqlRequest<{ getScrimmages: DueScrimmage[] }>(GET_DUE_SCRIMMAGES);
+        due = result.getScrimmages;
+    } catch (err) {
+        console.error("autoReadyArtificialOpponents: failed to load scheduled scrimmages", err);
+        return;
+    }
+
+    for (const scrim of due) {
+        if (scrim.readyOpponent) continue;
+        if (!scrim.scheduledAt || scrim.scheduledAt > now) continue;
+        if (!scrim.opponentOrg?.artificial) continue;
+
+        try {
+            await graphqlRequest(READY_UP_OPPONENT, { scrimmage_id: scrim._id });
+            io.to(`scrim:${scrim._id}`).emit("scrim:refresh");
+        } catch (err) {
+            console.error(`autoReadyArtificialOpponents: failed to ready up scrim ${scrim._id}`, err);
+        }
+    }
+}
+
+autoReadyArtificialOpponents();
+setInterval(autoReadyArtificialOpponents, ARTIFICIAL_READY_CHECK_INTERVAL_MS);
+
 httpServer.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV ?? "development"} mode on port ${PORT}`);
 });

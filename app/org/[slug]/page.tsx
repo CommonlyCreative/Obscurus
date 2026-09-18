@@ -12,6 +12,7 @@ import { OrgScrimHistory } from "@/components/org/OrgScrimHistory";
 import { OrgInviteBanner } from "@/components/org/OrgInviteBanner";
 import { OrgMemberStatus, OrgRole } from "@/app/api/graphql/types/graphql";
 import { OrgAvailabilityPanel } from "@/components/org/OrgAvailabilityPanel";
+import { updateAvailabilityBlocksAction } from "./actions";
 
 const OrgPageQuery = graphql(`
   query OrgPage($slug: String!) {
@@ -119,6 +120,7 @@ async function OrgContent({ params }: { params: Promise<{ slug: string }> }) {
                         slug={slug}
                         isManager={isManager}
                         blocks={org.blocks}
+                        onSave={updateAvailabilityBlocksAction}
                     />
                     <div className="bg-surface border border-edge rounded-lg overflow-hidden mt-4">
                         <div className="px-5 py-4 border-b border-edge">

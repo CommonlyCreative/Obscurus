@@ -15,6 +15,7 @@ import {
     Customer,
     ScrimmageStatus,
     OrgRequest,
+    OrgMemberStatus,
 } from "./server";
 import { asyncMap } from "@/lib/utils";
 import { getDeadlockRank } from "@/lib/actions/deadlockapi";
@@ -428,6 +429,14 @@ export const resolvers: Resolvers = {
         updateUser: async (_, { user_id, input }, { dataSources: { users } }) => {
             return users.updateUserById(user_id, input) as any as Promise<User | null>;
         },
+        createPlaceholderUser: async (_, { input }, { dataSources: { users } }) => {
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
+
+            const existing = await users.getUserByEmail(input.email);
+            if (existing) throw new Error("A user with this email already exists");
+
+            return users.createManualUser(input) as any as User;
+        },
         createCustomer: async (_, { input }, { dataSources: { customers } }) => {
             return customers.createCustomer(input) as any as Promise<Customer>;
         },
@@ -437,6 +446,39 @@ export const resolvers: Resolvers = {
             const s = scrimmages.createScrimmage(input);
             input.team.forEach(id => users.addScrimmageToUser(id, s._id.toString()))
             if (!s) throw new Error("Failed to create scrimmage");
+            return s as any as Scrimmage;
+        },
+        createArtificialScrimmage: async (_, { input }, { dataSources: { scrimmages, organizations, users } }) => {
+            const hostOrg = await organizations.getOrganization(input.hostOrg_id);
+            if (!hostOrg) throw new Error("Host organization not found");
+            if (hostOrg.artificial) throw new Error("Host must be a real organization — only the opponent may be artificial");
+            if (!hostOrg.members.some(m => m.user === input.host_id && m.status === OrgMemberStatus.Active)) {
+                throw new Error("Host leader must be an active member of the host organization");
+            }
+            if (input.hostTeam.length !== 6) throw new Error("Host team must have exactly 6 players");
+
+            const opponentOrg = await organizations.getOrganization(input.opponentOrg_id);
+            if (!opponentOrg) throw new Error("Opponent organization not found");
+            if (!opponentOrg.artificial) throw new Error("Opponent must be an artificial organization for admin-scheduled matches");
+
+            if (input.opponentTeam.length !== 6) {
+                throw new Error("Artificial organization needs 6 active players to be scheduled as an opponent");
+            }
+
+            const s = await scrimmages.createArtificialScrimmage({
+                hostOrg_id: input.hostOrg_id,
+                host_id: input.host_id,
+                hostTeam: input.hostTeam,
+                opponentOrg_id: input.opponentOrg_id,
+                opponentTeam: input.opponentTeam,
+                opponentLeader: opponentOrg.owner,
+                scheduledAt: input.scheduledAt,
+                bestOf: input.bestOf ?? undefined,
+                note: input.note ?? undefined,
+            });
+
+            [...input.hostTeam, ...input.opponentTeam].forEach(id => users.addScrimmageToUser(id, s._id.toString()));
+
             return s as any as Scrimmage;
         },
         updateScrimmage: async (_, { scrimmage_id, input }, { dataSources: { scrimmages } }) => {

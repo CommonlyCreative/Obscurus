@@ -103,6 +103,7 @@ export class OrganizationDataSource {
             members: [],
             coreTeam: [],
             blocks: [],
+            artificial: input.artificial ?? false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };

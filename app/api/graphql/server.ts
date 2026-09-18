@@ -83,7 +83,19 @@ export enum CardFunding {
   Unknown = 'UNKNOWN'
 }
 
+export type CreateArtificialScrimmageInput = {
+  bestOf?: InputMaybe<BestOf>;
+  hostOrg_id: Scalars['String']['input'];
+  hostTeam: Array<Scalars['String']['input']>;
+  host_id: Scalars['String']['input'];
+  note?: InputMaybe<Scalars['String']['input']>;
+  opponentOrg_id: Scalars['String']['input'];
+  opponentTeam: Array<Scalars['String']['input']>;
+  scheduledAt: Scalars['Timestamp']['input'];
+};
+
 export type CreateOrganizationInput = {
+  artificial?: InputMaybe<Scalars['Boolean']['input']>;
   description?: InputMaybe<Scalars['String']['input']>;
   logo?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
@@ -246,9 +258,11 @@ export type Mutation = {
   cancelOrgRequest?: Maybe<Scalars['Boolean']['output']>;
   cancelScrimmage?: Maybe<Scrimmage>;
   cancelSubstituteRequest?: Maybe<SubstituteRequest>;
+  createArtificialScrimmage?: Maybe<Scrimmage>;
   createCustomer?: Maybe<Customer>;
   createOrganization?: Maybe<Organization>;
   createPlaceholderPlayer?: Maybe<OrganizationMember>;
+  createPlaceholderUser?: Maybe<User>;
   createScrimmage?: Maybe<Scrimmage>;
   createSubstituteRequest?: Maybe<SubstituteRequest>;
   createUser?: Maybe<User>;
@@ -366,6 +380,11 @@ export type MutationCancelSubstituteRequestArgs = {
 };
 
 
+export type MutationCreateArtificialScrimmageArgs = {
+  input: CreateArtificialScrimmageInput;
+};
+
+
 export type MutationCreateCustomerArgs = {
   input: CustomerInput;
 };
@@ -381,6 +400,11 @@ export type MutationCreatePlaceholderPlayerArgs = {
   input: CreatePlaceholderPlayerInput;
   orgRole: OrgRole;
   org_id: Scalars['String']['input'];
+};
+
+
+export type MutationCreatePlaceholderUserArgs = {
+  input: CreatePlaceholderPlayerInput;
 };
 
 
@@ -662,6 +686,7 @@ export enum OrgRole {
 export type Organization = {
   __typename?: 'Organization';
   _id: Scalars['ID']['output'];
+  artificial: Scalars['Boolean']['output'];
   blocks: Array<AvailabilityBlock>;
   coreTeam: Array<User>;
   createdAt: Scalars['Timestamp']['output'];
@@ -1370,6 +1395,7 @@ export type ResolversTypes = ResolversObject<{
   BestOf: BestOf;
   Boolean: ResolverTypeWrapper<Scalars['Boolean']['output']>;
   CardFunding: CardFunding;
+  CreateArtificialScrimmageInput: CreateArtificialScrimmageInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreatePlaceholderPlayerInput: CreatePlaceholderPlayerInput;
   CreateScrimmageInput: CreateScrimmageInput;
@@ -1456,6 +1482,7 @@ export type ResolversParentTypes = ResolversObject<{
   Balance: Balance;
   BalanceInput: BalanceInput;
   Boolean: Scalars['Boolean']['output'];
+  CreateArtificialScrimmageInput: CreateArtificialScrimmageInput;
   CreateOrganizationInput: CreateOrganizationInput;
   CreatePlaceholderPlayerInput: CreatePlaceholderPlayerInput;
   CreateScrimmageInput: CreateScrimmageInput;
@@ -1605,9 +1632,11 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   cancelOrgRequest?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationCancelOrgRequestArgs, 'request_id' | 'user_id'>>;
   cancelScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCancelScrimmageArgs, 'scrimmage_id'>>;
   cancelSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCancelSubstituteRequestArgs, 'request_id'>>;
+  createArtificialScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCreateArtificialScrimmageArgs, 'input'>>;
   createCustomer?: Resolver<Maybe<ResolversTypes['Customer']>, ParentType, ContextType, RequireFields<MutationCreateCustomerArgs, 'input'>>;
   createOrganization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationCreateOrganizationArgs, 'input' | 'owner_id'>>;
   createPlaceholderPlayer?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationCreatePlaceholderPlayerArgs, 'input' | 'orgRole' | 'org_id'>>;
+  createPlaceholderUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreatePlaceholderUserArgs, 'input'>>;
   createScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCreateScrimmageArgs, 'input'>>;
   createSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCreateSubstituteRequestArgs, 'input'>>;
   createUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreateUserArgs, 'input'>>;
@@ -1675,6 +1704,7 @@ export type OrgRequestResolvers<ContextType = Context, ParentType extends Resolv
 
 export type OrganizationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Organization'] = ResolversParentTypes['Organization']> = ResolversObject<{
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
+  artificial?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
   blocks?: Resolver<Array<ResolversTypes['AvailabilityBlock']>, ParentType, ContextType>;
   coreTeam?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;

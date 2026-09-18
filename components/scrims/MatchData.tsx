@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MatchLookupResult } from "@/lib/actions/deadlockMatchCache";
-import { ChevronLeft, Swords, Target, Heart } from "lucide-react";
+import { ChevronLeft, Swords, Target, Heart, Coins } from "lucide-react";
 import { getMatch } from "@/app/scrims/[id]/actions";
 import { cn } from "@/lib/utils";
-import { GiCrown } from "react-icons/gi";
-import { PiCrownSimpleDuotone } from "react-icons/pi";
 import { MatchResult } from "@/app/api/graphql/types/graphql";
 import { useRouter } from "next/navigation";
 import { EnrichedPlayer, getMatchPlayersData } from "@/app/scrims/[id]/cache";
@@ -15,6 +13,12 @@ type TeamDisplay = {
     name: "Hidden King" | "Arch Mother"
     id: number
 }
+
+const MVP_RANK_STYLE: Record<number, { label: string; text: string; badge: string; ring: string }> = {
+    1: { label: "MVP", text: "text-[#f0e463]", badge: "bg-[#f0e463] text-black", ring: "border-[#f0e463]/50" },
+    2: { label: "2nd", text: "text-[#cbd5e1]", badge: "bg-[#cbd5e1] text-black", ring: "border-[#cbd5e1]/50" },
+    3: { label: "3rd", text: "text-[#c7893f]", badge: "bg-[#c7893f] text-black", ring: "border-[#c7893f]/50" },
+};
 
 function MatchData({ match_id, result }: { match_id: string, result: MatchResult }) {
     const router = useRouter();
@@ -37,9 +41,12 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
         });
     }, [match_id]);
 
-    useEffect(() => {
-        console.log("UPDATED", enrichedPlayers)
-    }, [enrichedPlayers])
+    const topPlayers = useMemo(() => {
+        if (!enrichedPlayers) return [];
+        return enrichedPlayers
+            .filter((p): p is EnrichedPlayer & { mvp_rank: number } => p.mvp_rank != null && p.mvp_rank <= 3)
+            .sort((a, b) => a.mvp_rank - b.mvp_rank);
+    }, [enrichedPlayers]);
 
     if (!metadata) return <Loading />;
 
@@ -61,6 +68,7 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
     const minutes = Math.floor(metadata.match_info.duration_s / 60);
     const seconds = metadata.match_info.duration_s % 60;
 
+
     if (viewPlayer) {
         const endStats = viewPlayer.stats.at(-1);
         const items = viewPlayer.items.filter(item => !item.hero).sort((a, b) => a.item_tier - b.item_tier);
@@ -69,7 +77,7 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
                 <div className="relative h-36 bg-surface-2 border-b border-edge overflow-hidden">
                     <img
                         src={viewPlayer.hero.images.icon_hero_card}
-                        className="absolute right-0 top-0 h-full w-auto object-cover opacity-20 select-none pointer-events-none"
+                        className="absolute right-0 top-0 h-full w-auto object-cover opacity-10 select-none pointer-events-none"
                         alt=""
                     />
                     <div className="absolute inset-0 bg-linear-to-r from-surface-2 via-surface-2/80 to-transparent" />
@@ -100,12 +108,22 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
                                 <span className="text-sm text-dimmed">{viewPlayer.hero.name}</span>
                             </div>
                         </div>
+                        <div className="ml-auto text-right shrink-0 text-shadow-lg/40">
+                            <div className="text-2xl font-bold text-foreground tabular-nums leading-tight">
+                                {viewPlayer.kills}
+                                <span className="text-dimmed font-normal mx-0.5">/</span>
+                                {viewPlayer.deaths}
+                                <span className="text-dimmed font-normal mx-0.5">/</span>
+                                {viewPlayer.assists}
+                            </div>
+                            <div className="text-[10px] text-muted uppercase tracking-widest">Kills / Deaths / Assists</div>
+                        </div>
                     </div>
                 </div>
 
                 <div className="p-4 md:p-6 space-y-6">
                     {endStats ? (
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div className="bg-surface-2 border border-edge rounded-lg p-4 flex flex-col gap-1">
                                 <div className="flex items-center gap-1.5 text-muted">
                                     <Swords className="w-3.5 h-3.5" />
@@ -126,6 +144,13 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
                                     <span className="text-xs uppercase tracking-wider">Healing</span>
                                 </div>
                                 <span className="text-xl font-semibold text-foreground">{endStats.player_healing.toLocaleString()}</span>
+                            </div>
+                            <div className="bg-surface-2 border border-edge rounded-lg p-4 flex flex-col gap-1">
+                                <div className="flex items-center gap-1.5 text-muted">
+                                    <Coins className="w-3.5 h-3.5" />
+                                    <span className="text-xs uppercase tracking-wider">Net Worth</span>
+                                </div>
+                                <span className="text-xl font-semibold text-foreground">{viewPlayer.net_worth.toLocaleString()}</span>
                             </div>
                         </div>
                     ) : (
@@ -159,8 +184,58 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
     return (
         <div className="bg-surface border border-edge rounded-xl p-4 md:p-8 relative shadow-sm shadow-black">
             <span className="absolute top-4 right-4 md:right-6 text-xs font-semibold px-2.5 py-1 rounded-full border bg-indigo-300/10 text-indigo-300 border-indigo-300/30">
-                {minutes}:{seconds}
+                {minutes}:{seconds.toString().padStart(2, "0")}
             </span>
+
+            {topPlayers.length > 0 && (
+                <>
+                <div className="">
+                    <p className="text-xs text-muted uppercase tracking-widest mb-3">Top Performers</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {topPlayers.map(player => {
+                            const style = MVP_RANK_STYLE[player.mvp_rank];
+                            return (
+                                <button
+                                    key={player.account_id}
+                                    onClick={() => setViewPlayer(player)}
+                                    className={cn(
+                                        "flex items-center gap-3 p-3 rounded-lg border bg-surface-2 hover:bg-surface-2/70 transition-colors text-left",
+                                        style.ring,
+                                    )}
+                                >
+                                    <div className="relative shrink-0">
+                                        <img
+                                            src={player.hero.images.minimap_image}
+                                            className="w-12 h-12 rounded-md border border-edge"
+                                            alt={player.hero.name}
+                                        />
+                                        <span className={cn(
+                                            "absolute -top-1.5 -left-1.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-sm shadow-black/40",
+                                            style.badge,
+                                        )}>
+                                            {player.mvp_rank}
+                                        </span>
+                                    </div>
+                                    <div className="min-w-0">
+                                        <p className={cn("text-[10px] font-bold uppercase tracking-wider", style.text)}>
+                                            {style.label}
+                                        </p>
+                                        <p className="text-sm font-semibold text-foreground truncate">{player.personaname}</p>
+                                        <p className="text-xs text-dimmed truncate">{player.hero.name}</p>
+                                        <p className="text-xs text-muted tabular-nums mt-0.5">
+                                            {player.kills}/{player.deaths}/{player.assists}
+                                        </p>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            <hr className="my-4 bg-edge/40 mx-10" />
+            </>
+            )}
+
+
             <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-stretch md:items-start">
                 <Team
                     team_id={hostTeam.id}
@@ -232,14 +307,15 @@ function Team({
                         onClick={() => setViewPlayer(player)}
                         className="flex flex-col items-center gap-2 group cursor-pointer relative"
                     >
-                        <div className="rounded-lg border border-edge group-hover:border-primary/50 transition-colors duration-200 overflow-hidden">
+                        <div className={cn(
+                            "rounded-lg border group-hover:border-primary/50 transition-colors duration-200 overflow-hidden",
+                            player.mvp_rank != null && player.mvp_rank <= 3 ? MVP_RANK_STYLE[player.mvp_rank].ring : "border-edge",
+                        )}>
                             <img src={player.hero.images.minimap_image} className="w-16 h-16" alt={player.hero.name} />
                         </div>
                         <span className="text-xs break-all text-dimmed group-hover:text-foreground transition-colors text-center leading-tight">
                             {player.personaname}
                         </span>
-                        {player.mvp_rank === 1 && <GiCrown className="absolute right-4 h-6 w-6 -top-2 text-[#f0e463]" />}
-                        {player.mvp_rank && player.mvp_rank !== 1 && <PiCrownSimpleDuotone className="absolute right-4 h-6 w-6 -top-2 text-[#c7a237]" />}
                     </button>
                 ))}
             </div>
