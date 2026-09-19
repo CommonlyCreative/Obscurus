@@ -16,21 +16,21 @@ export type EnrichedPlayer = SteamPlayer
 export async function getItem(item_id: string | number) {
     "use cache";
     cacheLife("days");
-    const res = await fetch(`https://assets.deadlock-api.com/v2/items/${item_id}`);
+    const res = await fetch(`https://api.deadlock-api.com/v1/assets/items/${item_id}`);
     return res.json() as Promise<any>;
 }
 
 export async function getHero(hero_id: string | number) {
     "use cache";
     cacheLife("days");
-    const res = await fetch(`https://assets.deadlock-api.com/v2/heroes/${hero_id}`);
+    const res = await fetch(`https://api.deadlock-api.com/v1/assets/heroes/by-name/${hero_id}`);
     return res.json() as Promise<any>;
 }
 
 export async function getHeroes(): Promise<DeadlockHero[]> {
     "use cache";
     cacheLife("days");
-    const res = await fetch(`https://assets.deadlock-api.com/v2/heroes`);
+    const res = await fetch(`https://api.deadlock-api.com/v1/assets/heroes`);
     return res.json();
 }
 

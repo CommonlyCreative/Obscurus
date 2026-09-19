@@ -41,7 +41,7 @@ const GetScrimmageQuery = graphql(`
                 concludedAt
             }
             host { _id name stats { mmr } }
-            hostOrg { _id name }
+            hostOrg { _id name members { orgRole status user { _id } } }
             hostTeam {
                 name
                 leader { _id name stats { mmr } }
@@ -122,14 +122,15 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     const opponentMemberIds = scrim.opponentTeam?.members.map((m) => m._id) ?? [];
     const isHostMember = user ? hostMemberIds.includes(user.id) : false;
     const isOpponentMember = user ? opponentMemberIds.includes(user.id) : false;
-    // const isManager
     const isHostLeader = user?.id === scrim.hostTeam?.leader._id;
     const isOpponentLeader = user?.id === scrim.opponentTeam?.leader._id;
     const isOpponentOrgManager = scrim.opponentOrg?.members.some(
         member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
     ) ?? false;
+    const isHostOrgManager = scrim.hostOrg?.members.some(
+        member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
+    ) ?? false;
 
-    console.log("")
 
     return (
         <ScrimDetail
@@ -142,6 +143,7 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
             isOpponentMember={isOpponentMember}
             hostOrgId={scrim.hostOrg?._id ?? null}
             isOpponentOrgManager={isOpponentOrgManager}
+            isHostOrgManager={isHostOrgManager}
             viewerOrgId={viewerOrgId}
         />
     );

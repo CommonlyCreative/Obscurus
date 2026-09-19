@@ -273,7 +273,6 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
                             <input
                                 type="datetime-local"
                                 value={scheduledAt}
-                                min={minDateTimeLocal()}
                                 onChange={(e) => setScheduledAt(e.target.value)}
                                 className={inp}
                             />

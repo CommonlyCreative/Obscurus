@@ -81,6 +81,7 @@ export function Navbar() {
     const navLinks = [
         { href: "/", label: "Home", exact: true },
         { href: "/scrims", label: "Scrims", exact: false },
+        { href: "/archives", label: "Archives", exact: false },
         { href: "/search", label: "Search", exact: false },
         { href: "/feedback", label: "Feedback", exact: false },
     ];

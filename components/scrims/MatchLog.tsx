@@ -79,8 +79,10 @@ export function MatchLog({
     const activeMatch = matches.find((m) => !m.result);
     const completedMatches = matches.filter((m) => m.result);
 
-    const hostWins = completedMatches.filter((m) => m.result === MatchResult.HostWin).length;
-    const oppWins = completedMatches.filter((m) => m.result === MatchResult.OpponentWin).length;
+    const [selectedMatchNumber, setSelectedMatchNumber] = useState<number | null>(null);
+    const selectedMatch = completedMatches.find((m) => m.number === selectedMatchNumber)
+        ?? completedMatches[completedMatches.length - 1]
+        ?? null;
 
     // Test later: 77989671, 77990585
 
@@ -247,21 +249,6 @@ export function MatchLog({
                 </div>
                 : <></>}
 
-            {/* Series score */}
-            {(hostWins > 0 || oppWins > 0) && (
-                <div className="flex items-center justify-center gap-6 py-3 bg-surface border border-edge rounded-lg">
-                    <div className="text-center">
-                        <div className="text-2xl font-black text-foreground">{hostWins}</div>
-                        <div className="text-xs text-muted">Host</div>
-                    </div>
-                    <div className="text-muted text-lg font-bold">—</div>
-                    <div className="text-center">
-                        <div className="text-2xl font-black text-foreground">{oppWins}</div>
-                        <div className="text-xs text-muted">Opponent</div>
-                    </div>
-                </div>
-            )}
-
             {/* Active match — in progress */}
             {activeMatch && (
                 <div className="bg-surface border border-primary/30 rounded-lg p-4">
@@ -396,41 +383,63 @@ export function MatchLog({
                 <p className="text-xs text-muted text-center italic">Set a party code above before starting a match.</p>
             )}
 
-            {/* Completed match history */}
+            {/* Completed match history — tabbed */}
             {completedMatches.length > 0 && (
                 <div>
                     <div className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Match History</div>
-                    <div className="space-y-1.5">
-                        {completedMatches.map((m) => (
-                            <div key={m.number} className="bg-surface border border-edge rounded px-3 py-2">
-                                <div className="flex items-center gap-3 p-4">
-                                    <span className="text-xs text-muted w-14 flex-1">Match {m.number}</span>
-                                    {/* <span className={cn("text-xs font-semibold flex-1", m.result ? RESULT_COLOR[m.result] : "text-muted")}>
-                                        {m.result ? RESULT_LABEL[m.result] : "—"}
-                                    </span> */}
-                                    {m.match_id && (
-                                        <span className={cn("px-2.5 py-1 rounded-full text-xs transition cursor-pointer",
-                                            "text-muted border-muted/30 hover:text-mauve-500 hover:bg-mauve-500/10",
-                                            "font-mono truncate max-w-28 bg-muted/10"
-                                        )} title={m.match_id} onClick={() => {
-                                            if (!m.match_id) return;
-                                            toast.success("Copied Match Id")
-                                            navigator.clipboard.writeText(m.match_id)
-                                        }}>
-                                            {m.match_id}
+
+                    <div className="flex items-center gap-1 border-b border-edge overflow-x-auto">
+                        {completedMatches.map((m) => {
+                            const isSelected = selectedMatch?.number === m.number;
+                            return (
+                                <button
+                                    key={m.number}
+                                    type="button"
+                                    onClick={() => setSelectedMatchNumber(m.number)}
+                                    className={cn(
+                                        "px-3 py-1.5 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition-colors",
+                                        isSelected
+                                            ? "border-primary text-foreground"
+                                            : "border-transparent text-muted hover:text-dimmed"
+                                    )}
+                                >
+                                    Match {m.number}
+                                    {m.result && (
+                                        <span className={cn("ml-1.5", isSelected ? RESULT_COLOR[m.result] : "text-muted")}>
+                                            {RESULT_LABEL[m.result]}
                                         </span>
                                     )}
-                                    {m.concludedAt && (
-                                        <span className="text-xs text-muted shrink-0">
-                                            {formatTimeAgo(new Date(m.concludedAt))}
-                                        </span>
-                                    )}
-                                </div>
-                                {m.match_id ?
-                                    <MatchData match_id={m.match_id} result={m.result!} /> : <></>}
-                            </div>
-                        ))}
+                                </button>
+                            );
+                        })}
                     </div>
+
+                    {selectedMatch && (
+                        <div className="bg-surface border border-edge rounded-b px-3 py-2">
+                            <div className="flex items-center gap-3 p-4">
+                                <span className="text-xs text-muted w-14 flex-1">Match {selectedMatch.number}</span>
+                                {selectedMatch.match_id && (
+                                    <span className={cn("px-2.5 py-1 rounded-full text-xs transition cursor-pointer",
+                                        "text-muted border-muted/30 hover:text-mauve-500 hover:bg-mauve-500/10",
+                                        "font-mono truncate max-w-28 bg-muted/10"
+                                    )} title={selectedMatch.match_id} onClick={() => {
+                                        if (!selectedMatch.match_id) return;
+                                        toast.success("Copied Match Id")
+                                        navigator.clipboard.writeText(selectedMatch.match_id)
+                                    }}>
+                                        {selectedMatch.match_id}
+                                    </span>
+                                )}
+                                {selectedMatch.concludedAt && (
+                                    <span className="text-xs text-muted shrink-0">
+                                        {formatTimeAgo(new Date(selectedMatch.concludedAt))}
+                                    </span>
+                                )}
+                            </div>
+                            {selectedMatch.match_id ?
+                                <MatchData key={selectedMatch.match_id} match_id={selectedMatch.match_id} result={selectedMatch.result!} /> : <></>}
+                        </div>
+                    )}
                 </div>
             )}
 

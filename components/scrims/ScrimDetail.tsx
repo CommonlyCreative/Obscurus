@@ -5,7 +5,7 @@ import { useTransition, useState } from "react";
 import { ArrayElement, cn, formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
 import { MatchLog } from "@/components/scrims/MatchLog";
-import { ScrimmageStatus, ScrimmageResult, MatchSide, BestOf, InvitationStatus, OrgMemberStatus, GetScrimmageDetailQuery } from "@/app/api/graphql/types/graphql";
+import { ScrimmageStatus, ScrimmageResult, MatchResult, MatchSide, BestOf, InvitationStatus, OrgMemberStatus, GetScrimmageDetailQuery } from "@/app/api/graphql/types/graphql";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { useScrimSocket } from "@/hooks/useScrimSocket";
 import type { ScrimPatch } from "@/lib/socket/scrims";
@@ -46,6 +46,7 @@ export interface ScrimDetailProps {
     isHostMember: boolean;
     isOpponentMember: boolean;
     isOpponentOrgManager: boolean;
+    isHostOrgManager: boolean;
     hostOrgId: string | null;
     viewerOrgId: string | null;
 }
@@ -120,6 +121,7 @@ export function ScrimDetail({
     isOpponentMember,
     hostOrgId: _hostOrgId,
     isOpponentOrgManager,
+    isHostOrgManager,
     viewerOrgId: _viewerOrgId,
 }: ScrimDetailProps) {
     const router = useRouter();
@@ -259,21 +261,17 @@ export function ScrimDetail({
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
     const roster = isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
 
-    const rankAverages = getRankAverages();
+    const rankAverageMMR = getRankAverages();
+    const rankAverage = getRankByMMR(rankAverageMMR)
     const hostName = scrim.hostOrg?.name ?? scrim.hostTeam.name ?? "";
     const opponenetName = scrim.opponentOrg?.name ?? scrim.opponentTeam?.name;
 
-    const getResultMessage = () => {
-        if (result === ScrimmageResult.Cancelled)
-            return "Series Cancelled"
-        if (result === ScrimmageResult.Draw)
-            return "Series Ended in a Draw"
-        if (result === ScrimmageResult.HostWin)
-            return `${hostName} Won the Series`
-        if (result === ScrimmageResult.OpponentWin)
-            return `${opponenetName} Won the Series`
-        return `Unknown Result`
-    }
+    const completedMatches = live.matches.filter((m) => m.result);
+    const hostMatchWins = completedMatches.filter((m) => m.result === MatchResult.HostWin).length;
+    const oppMatchWins = completedMatches.filter((m) => m.result === MatchResult.OpponentWin).length;
+    const showSeriesScore = live.matches.length > 0;
+    const hostWonSeries = isFinished && result === ScrimmageResult.HostWin;
+    const oppWonSeries = isFinished && result === ScrimmageResult.OpponentWin;
 
     function getRankAverages() {
         const hostRankReduce = scrim.hostTeam.members.reduce((acc, memb) => {
@@ -290,8 +288,10 @@ export function ScrimDetail({
             return acc;
         }, [0, 0])
 
-        const opponentRankAvg = opponentRankReduce ? opponentRankReduce[0] / opponentRankReduce[1] : 0;
-        return [hostRankAvg, opponentRankAvg]
+        const opponentRankAvg = opponentRankReduce && opponentRankReduce[1] !== 0 ? opponentRankReduce[0] / opponentRankReduce[1] : 0;
+        if (hostRankAvg === 0) return opponentRankAvg;
+        if (opponentRankAvg === 0) return hostRankAvg;
+        return (hostRankAvg + opponentRankAvg) / 2
     }
 
     function handleRespondToInvite(newStatus: InvitationStatus) {
@@ -413,7 +413,7 @@ export function ScrimDetail({
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
 
             {/* ── VS Match Card ── */}
-            <div className="bg-surface border border-edge rounded-lg overflow-hidden">
+            <div className="bg-surface border border-edge rounded-lg overflow-hidden z-0">
 
                 {/* Badges row */}
                 <div className="flex items-center gap-2 px-5 py-3 border-b border-edge bg-surface-2/30">
@@ -435,6 +435,21 @@ export function ScrimDetail({
                             Private
                         </span>
                     )}
+                    {rankAverage && <Tooltip>
+                        <TooltipTrigger>
+                            <div className="w-10">
+                                <img
+                                    src={getRankImage(rankAverageMMR)}
+                                    alt={rankAverage.rank.name}
+                                    loading="lazy"
+                                    className="object-cover"
+                                />
+                            </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{`${rankAverage.rank.name} ${rankAverage.division}`}</p>
+                        </TooltipContent>
+                    </Tooltip>}
                     <span className="text-xs text-muted ml-auto">{formatTimeAgo(new Date(scrim.createdAt))}</span>
                 </div>
 
@@ -442,15 +457,23 @@ export function ScrimDetail({
                 <div className="relative grid grid-cols-2">
                     {/* Host */}
                     <div className="pl-6 pr-12 py-5 self-center flex min-w-0">
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 relative">
                             <div className="flex gap-2">
                                 <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">Host</div>
                             </div>
                             <div className="text-2xl flex items-center gap-3 font-black text-foreground leading-tight min-w-0">
-                                <span className="truncate">{hostName}</span>
+                                <span className="truncate ">{hostName}</span>
                                 {scrim.hostOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
                                     ORG
                                 </span>}
+                                {showSeriesScore && (
+                                    <span className={cn(
+                                        "text-5xl font-black shrink-0 absolute right-2 top-1/2 -translate-y-1/2",
+                                        hostWonSeries ? "text-success" : oppWonSeries ? "text-muted" : "text-foreground"
+                                    )}>
+                                        {hostMatchWins}
+                                    </span>
+                                )}
                             </div>
                             {showReadyState && (
                                 <div className={cn("text-xs font-semibold mt-2 flex items-center gap-1.5", readyHost ? "text-success" : "text-muted")}>
@@ -459,46 +482,24 @@ export function ScrimDetail({
                                 </div>
                             )}
                         </div>
-                        {!!rankAverages[0] && <Tooltip>
-                            <TooltipTrigger>
-                                <div className="w-24">
-                                    <img
-                                        src={getRankImage(rankAverages[0])}
-                                        alt={getRankByMMR(rankAverages[0])?.rank.name}
-                                        loading="lazy"
-                                        className="object-cover"
-                                    />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{`${getRankByMMR(rankAverages[0])?.rank.name} ${getRankByMMR(rankAverages[0])?.division}`}</p>
-                            </TooltipContent>
-                        </Tooltip>}
                     </div>
 
                     {/* Opponent */}
                     <div className="pl-12 pr-6 py-5 text-right self-center flex min-w-0">
-                        {!!rankAverages[1] && <Tooltip>
-                            <TooltipTrigger>
-                                <div className="w-24">
-                                    <img
-                                        src={getRankImage(rankAverages[1])}
-                                        alt={getRankByMMR(rankAverages[1])?.rank.name}
-                                        loading="lazy"
-                                        className="object-cover"
-                                    />
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{`${getRankByMMR(rankAverages[1])?.rank.name} ${getRankByMMR(rankAverages[1])?.division}`}</p>
-                            </TooltipContent>
-                        </Tooltip>}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 relative">
                             <div className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1.5">
                                 {scrim.opponentOrg || scrim.opponentTeam ? "Opponent" : "Awaiting"}
                             </div>
 
                             <div className={cn("text-2xl justify-end flex items-center gap-3 font-black leading-tight min-w-0", scrim.opponentOrg || scrim.opponentTeam ? "text-foreground" : "text-edge")}>
+                                {showSeriesScore && (
+                                    <span className={cn(
+                                        "text-5xl font-black shrink-0 absolute left-2 top-1/2 -translate-y-1/2",
+                                        oppWonSeries ? "text-success" : hostWonSeries ? "text-muted" : "text-foreground"
+                                    )}>
+                                        {oppMatchWins}
+                                    </span>
+                                )}
                                 {scrim.opponentOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
                                     ORG
                                 </span>}
@@ -514,21 +515,10 @@ export function ScrimDetail({
                     </div>
 
                     {/* VS divider — absolutely pinned to the true center */}
-                    <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 flex items-center justify-center px-6 border-x border-edge bg-surface">
+                    <div className="absolute inset-y-0 left-1/2 z-0 -translate-x-1/2 flex items-center justify-center px-6 border-x border-edge bg-surface">
                         <span className="text-base font-black text-edge tracking-wider">VS</span>
                     </div>
                 </div>
-
-                {/* Result banner */}
-                {isFinished && result && (
-                    <div className={cn("px-6 py-3 text-sm font-semibold text-center border-t",
-                        result === ScrimmageResult.HostWin ? "bg-success/10 text-success border-success/20" :
-                            result === ScrimmageResult.OpponentWin ? "bg-danger/10 text-danger border-danger/20" :
-                                "bg-surface-2 text-dimmed border-edge"
-                    )}>
-                        {getResultMessage()}
-                    </div>
-                )}
 
                 {/* Schedule / note footer */}
                 {(scrim.scheduledAt || scrim.note) && (
@@ -569,7 +559,7 @@ export function ScrimDetail({
                                 </div>
                                 {scrim.hostTeam ? (
                                     <div className="space-y-0.5">
-                                        {scrim.hostTeam.members.map(m => (
+                                        {scrim.hostTeam.members.sort((a, b) => a._id === scrim.hostTeam!.leader._id ? -1 : 1).map(m => (
                                             <RosterRow key={m._id} member={m} isLeader={m._id === scrim.hostTeam!.leader._id} />
                                         ))}
                                     </div>
@@ -781,10 +771,9 @@ export function ScrimDetail({
             {/* ── Match Log (full-width below grid) ── */}
             {(isActive || isCompleted) && (
                 <div className="bg-surface border border-edge rounded-lg p-4">
-                    <h2 className="text-xs font-semibold text-muted uppercase tracking-wider mb-4">Matches</h2>
                     <MatchLog
                         scrimmageId={scrim._id}
-                        canViewParyCode={!isCompleted && (isHostMember || isOpponentMember || isHostLeader || isOpponentLeader)}
+                        canViewParyCode={!isCompleted && (isHostMember || isOpponentMember || isHostLeader || isOpponentLeader || isOpponentOrgManager || isHostOrgManager)}
                         matches={live.matches}
                         partyCode={live.partyCode}
                         isHostLeader={isHostLeader}
