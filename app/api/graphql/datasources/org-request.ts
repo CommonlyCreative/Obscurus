@@ -75,6 +75,17 @@ export class OrgRequestDataSource {
         return result.deletedCount > 0;
     }
 
+    // Called when an org is disbanded so its owner is free to submit a new request.
+    // Only clears the APPROVED request that led to that org — a separate, unrelated
+    // PENDING or REJECTED request for the same user is left untouched.
+    async deleteApprovedRequest(user_id: string): Promise<boolean> {
+        const result = await this.collection.deleteOne({
+            user: user_id,
+            status: OrgRequestStatus.Approved,
+        });
+        return result.deletedCount > 0;
+    }
+
     async reviewRequest(
         request_id: string,
         status: OrgRequestStatus,

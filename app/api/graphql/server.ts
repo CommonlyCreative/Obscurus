@@ -113,6 +113,7 @@ export type CreateScrimmageInput = {
   host_id: Scalars['String']['input'];
   invitations?: InputMaybe<Array<ScrimmageInvitationInput>>;
   isPrivate: Scalars['Boolean']['input'];
+  leader_id?: InputMaybe<Scalars['String']['input']>;
   note?: InputMaybe<Scalars['String']['input']>;
   opponentOrg_id?: InputMaybe<Scalars['String']['input']>;
   partyCode?: InputMaybe<Scalars['String']['input']>;
@@ -234,6 +235,7 @@ export enum MatchResult {
   Cancelled = 'CANCELLED',
   Draw = 'DRAW',
   HostWin = 'HOST_WIN',
+  Inconclusive = 'INCONCLUSIVE',
   OpponentWin = 'OPPONENT_WIN'
 }
 
@@ -268,7 +270,7 @@ export type Mutation = {
   createUser?: Maybe<User>;
   declineOrgInvite?: Maybe<Scalars['Boolean']['output']>;
   declineScrimmageChallenge?: Maybe<Scrimmage>;
-  deleteOrganization?: Maybe<Scalars['Boolean']['output']>;
+  disbandOrganization?: Maybe<Scalars['Boolean']['output']>;
   dismissNotification?: Maybe<Scalars['Boolean']['output']>;
   endScrimmage?: Maybe<Scrimmage>;
   inviteMember?: Maybe<OrganizationMember>;
@@ -279,6 +281,7 @@ export type Mutation = {
   placeWager?: Maybe<Wager>;
   purchaseCredits?: Maybe<CreditPurchase>;
   readyUp?: Maybe<Scrimmage>;
+  reconcileMatchResult?: Maybe<Scrimmage>;
   removeCorePlayer?: Maybe<Organization>;
   removeMember?: Maybe<Scalars['Boolean']['output']>;
   respondToInvitation?: Maybe<ScrimmageInvitation>;
@@ -435,7 +438,7 @@ export type MutationDeclineScrimmageChallengeArgs = {
 };
 
 
-export type MutationDeleteOrganizationArgs = {
+export type MutationDisbandOrganizationArgs = {
   org_id: Scalars['String']['input'];
 };
 
@@ -493,6 +496,12 @@ export type MutationPurchaseCreditsArgs = {
 export type MutationReadyUpArgs = {
   scrimmage_id: Scalars['String']['input'];
   side: MatchSide;
+};
+
+
+export type MutationReconcileMatchResultArgs = {
+  match_number: Scalars['Int']['input'];
+  scrimmage_id: Scalars['String']['input'];
 };
 
 
@@ -691,6 +700,8 @@ export type Organization = {
   coreTeam: Array<User>;
   createdAt: Scalars['Timestamp']['output'];
   description?: Maybe<Scalars['String']['output']>;
+  disbanded: Scalars['Boolean']['output'];
+  disbandedAt?: Maybe<Scalars['Timestamp']['output']>;
   logo?: Maybe<Scalars['String']['output']>;
   members: Array<OrganizationMember>;
   name: Scalars['String']['output'];
@@ -1642,7 +1653,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   createUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreateUserArgs, 'input'>>;
   declineOrgInvite?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDeclineOrgInviteArgs, 'org_id' | 'user_id'>>;
   declineScrimmageChallenge?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationDeclineScrimmageChallengeArgs, 'scrimmage_id' | 'user_id'>>;
-  deleteOrganization?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDeleteOrganizationArgs, 'org_id'>>;
+  disbandOrganization?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDisbandOrganizationArgs, 'org_id'>>;
   dismissNotification?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDismissNotificationArgs, 'notification_id' | 'user_id'>>;
   endScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationEndScrimmageArgs, 'scrimmage_id'>>;
   inviteMember?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationInviteMemberArgs, 'orgRole' | 'org_id' | 'user_id'>>;
@@ -1653,6 +1664,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   placeWager?: Resolver<Maybe<ResolversTypes['Wager']>, ParentType, ContextType, RequireFields<MutationPlaceWagerArgs, 'input'>>;
   purchaseCredits?: Resolver<Maybe<ResolversTypes['CreditPurchase']>, ParentType, ContextType, RequireFields<MutationPurchaseCreditsArgs, 'input'>>;
   readyUp?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationReadyUpArgs, 'scrimmage_id' | 'side'>>;
+  reconcileMatchResult?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationReconcileMatchResultArgs, 'match_number' | 'scrimmage_id'>>;
   removeCorePlayer?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationRemoveCorePlayerArgs, 'org_id' | 'user_id'>>;
   removeMember?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationRemoveMemberArgs, 'org_id' | 'user_id'>>;
   respondToInvitation?: Resolver<Maybe<ResolversTypes['ScrimmageInvitation']>, ParentType, ContextType, RequireFields<MutationRespondToInvitationArgs, 'input'>>;
@@ -1709,6 +1721,8 @@ export type OrganizationResolvers<ContextType = Context, ParentType extends Reso
   coreTeam?: Resolver<Array<ResolversTypes['User']>, ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
   description?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  disbanded?: Resolver<ResolversTypes['Boolean'], ParentType, ContextType>;
+  disbandedAt?: Resolver<Maybe<ResolversTypes['Timestamp']>, ParentType, ContextType>;
   logo?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   members?: Resolver<Array<ResolversTypes['OrganizationMember']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;

@@ -70,6 +70,11 @@ function OrgListItem({
                             Artificial
                         </span>
                     )}
+                    {org.disbanded && (
+                        <span className="text-[9px] font-bold px-1 py-0.5 rounded border text-muted bg-surface-2 border-edge uppercase">
+                            Disbanded
+                        </span>
+                    )}
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[10px] text-muted truncate">Owner: {org.ownerName}</span>
@@ -334,6 +339,11 @@ function OrgDetail({
                                     Artificial
                                 </span>
                             )}
+                            {org.disbanded && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-muted bg-surface-2 border-edge uppercase">
+                                    Disbanded
+                                </span>
+                            )}
                             {canManage && (
                                 <Button size="sm" variant="ghost" onClick={() => setRenaming(true)}>
                                     Rename
@@ -344,6 +354,9 @@ function OrgDetail({
                     {!renaming && (
                         <p className="text-xs text-muted mt-0.5">
                             Created {formatTimeAgo(new Date(org.createdAt))}
+                            {org.disbanded && org.disbandedAt && (
+                                <> · Disbanded {formatTimeAgo(new Date(org.disbandedAt))}</>
+                            )}
                         </p>
                     )}
                 </div>
@@ -443,44 +456,54 @@ function OrgDetail({
             {canManage && (
                 <div className="border-t border-edge pt-4">
                     <p className="text-[10px] text-muted uppercase tracking-widest mb-2">Danger Zone</p>
-                    <p className="text-xs text-muted mb-2">
-                        Permanently disbands <span className="text-foreground font-medium">{org.name}</span> and
-                        removes all members. This cannot be undone.
-                    </p>
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <button
-                                type="button"
-                                disabled={disbandPending}
-                                className="px-4 py-2 text-sm font-semibold rounded border border-danger/40 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {disbandPending ? "Disbanding…" : "Disband Organization"}
-                            </button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-                            <DialogHeader>
-                                <DialogTitle>Disband {org.name}?</DialogTitle>
-                                <DialogDescription>
-                                    This will permanently delete the organization and remove all {org.members.length}{" "}
-                                    member{org.members.length !== 1 ? "s" : ""}. There is no way to undo this.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter className="sm:justify-start">
-                                <DialogClose asChild>
+                    {org.disbanded ? (
+                        <p className="text-xs text-muted italic">
+                            This organization has already been disbanded — its members are free to join others.
+                        </p>
+                    ) : (
+                        <>
+                            <p className="text-xs text-muted mb-2">
+                                Disbands <span className="text-foreground font-medium">{org.name}</span> and frees all
+                                members to join other organizations. The organization record is kept (flagged as
+                                disbanded), not deleted.
+                            </p>
+                            <Dialog>
+                                <DialogTrigger asChild>
                                     <button
                                         type="button"
-                                        onClick={disband}
-                                        className="px-4 py-2 text-sm font-semibold rounded border border-danger/40 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-colors"
+                                        disabled={disbandPending}
+                                        className="px-4 py-2 text-sm font-semibold rounded border border-danger/40 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        Yes, disband
+                                        {disbandPending ? "Disbanding…" : "Disband Organization"}
                                     </button>
-                                </DialogClose>
-                                <DialogClose asChild>
-                                    <Button type="button" variant="secondary" className="px-6">Cancel</Button>
-                                </DialogClose>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                                </DialogTrigger>
+                                <DialogContent className="sm:max-w-md" showCloseButton={false}>
+                                    <DialogHeader>
+                                        <DialogTitle>Disband {org.name}?</DialogTitle>
+                                        <DialogDescription>
+                                            This will free all {org.members.length} member{org.members.length !== 1 ? "s" : ""}{" "}
+                                            to join other organizations and clear the owner&apos;s org request. The
+                                            organization itself is kept on record as disbanded, not deleted.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <DialogFooter className="sm:justify-start">
+                                        <DialogClose asChild>
+                                            <button
+                                                type="button"
+                                                onClick={disband}
+                                                className="px-4 py-2 text-sm font-semibold rounded border border-danger/40 text-danger bg-danger/5 hover:bg-danger/15 hover:border-danger/60 transition-colors"
+                                            >
+                                                Yes, disband
+                                            </button>
+                                        </DialogClose>
+                                        <DialogClose asChild>
+                                            <Button type="button" variant="secondary" className="px-6">Cancel</Button>
+                                        </DialogClose>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </>
+                    )}
                     {disbandError && <p className="text-xs text-danger mt-2">{disbandError}</p>}
                 </div>
             )}

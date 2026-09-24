@@ -22,6 +22,8 @@ const OrgPageQuery = graphql(`
       slug
       description
       createdAt
+      disbanded
+      disbandedAt
       owner { _id name }
       members {
         user { _id name steam { id } }

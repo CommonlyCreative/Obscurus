@@ -44,6 +44,7 @@ const RESULT_LABEL: Record<MatchResult, string> = {
     [MatchResult.HostWin]: "Host Win",
     [MatchResult.OpponentWin]: "Opp Win",
     [MatchResult.Draw]: "Draw",
+    [MatchResult.Inconclusive]: "Inconclusive",
     [MatchResult.Cancelled]: "Cancelled",
 };
 
@@ -51,6 +52,7 @@ const RESULT_COLOR: Record<MatchResult, string> = {
     [MatchResult.HostWin]: "text-success",
     [MatchResult.OpponentWin]: "text-danger",
     [MatchResult.Draw]: "text-dimmed",
+    [MatchResult.Inconclusive]: "text-amber-400",
     [MatchResult.Cancelled]: "text-muted",
 };
 
@@ -149,7 +151,11 @@ export function MatchLog({
         setError(null);
         submitTransition(async () => {
             try {
-                let result = MatchResult.Draw;
+                // Couldn't determine a winner from the Deadlock API (rate-limited, or the
+                // match hasn't posted yet) — mark it inconclusive rather than guessing Draw.
+                // reconcileMatchResult re-derives the real result the next time this match
+                // is viewed, once the metadata is available.
+                let result = MatchResult.Inconclusive;
                 const metadata = await getMatch(matchId);
                 if (metadata && "match_info" in metadata && typeof metadata.match_info.winning_team === "number") {
                     const wt = metadata.match_info.winning_team;
@@ -437,7 +443,14 @@ export function MatchLog({
                                 )}
                             </div>
                             {selectedMatch.match_id ?
-                                <MatchData key={selectedMatch.match_id} match_id={selectedMatch.match_id} result={selectedMatch.result!} /> : <></>}
+                                <MatchData
+                                    key={selectedMatch.match_id}
+                                    scrimmageId={scrimmageId}
+                                    match_number={selectedMatch.number}
+                                    match_id={selectedMatch.match_id}
+                                    result={selectedMatch.result!}
+                                    onReconciled={(data) => onPatch({ status: data.status, result: data.result, matches: data.matches })}
+                                /> : <></>}
                         </div>
                     )}
                 </div>

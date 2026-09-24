@@ -61,6 +61,14 @@ const SubmitMatchResultMutation = graphql(`
     }
 `);
 
+const ReconcileMatchResultMutation = graphql(`
+    mutation ReconcileMatchResult($scrimmage_id: String!, $match_number: Int!) {
+        reconcileMatchResult(scrimmage_id: $scrimmage_id, match_number: $match_number) {
+            _id status result matches { number result startedAt concludedAt match_id }
+        }
+    }
+`);
+
 const EndScrimmageMutation = graphql(`
     mutation EndScrimmage($scrimmage_id: String!) {
         endScrimmage(scrimmage_id: $scrimmage_id) { _id status }
@@ -170,6 +178,14 @@ export async function submitMatchResultAction(
     return submitMatchResult;
 }
 
+export async function reconcileMatchResultAction(scrimmageId: string, matchNumber: number) {
+    const { reconcileMatchResult } = await grafbase.request(ReconcileMatchResultMutation, {
+        scrimmage_id: scrimmageId,
+        match_number: matchNumber,
+    });
+    return reconcileMatchResult;
+}
+
 export async function endScrimmageAction(scrimmageId: string) {
     const { endScrimmage } = await grafbase.request(EndScrimmageMutation, {
         scrimmage_id: scrimmageId,
@@ -224,9 +240,9 @@ export async function acceptChallengeAction(scrimmageId: string, user_id: string
     return acceptScrimmageChallenge;
 }
 
-export async function acceptChallengeWithRosterAction(scrimmageId: string, user_id: string, team: string[], teamName: string | undefined) {
+export async function acceptChallengeWithRosterAction(scrimmageId: string, user_id: string, team: string[], teamName: string | undefined, leaderId: string) {
     await grafbase.request(AcceptChallengeMutation, { scrimmage_id: scrimmageId, user_id });
-    return await setOpponentRoster(scrimmageId, user_id, team, teamName);
+    return await setOpponentRoster(scrimmageId, leaderId, team, teamName);
 }
 
 export async function setOpponentRoster(scrimmageId: string, user_id: string, team: string[], teamName: string | undefined) {

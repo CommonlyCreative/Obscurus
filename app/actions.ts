@@ -11,6 +11,9 @@ const NavBarQuery = graphql(`
       scrimmages {
         status
       }
+      organization {
+        slug
+      }
     }
   }
 `);

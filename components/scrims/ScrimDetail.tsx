@@ -145,6 +145,7 @@ export function ScrimDetail({
     const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(
         () => new Set((myOrg?.coreTeam ?? []).slice(0, 6).map(m => m._id))
     );
+    const [manualCaptainId, setManualCaptainId] = useState<string | null>(null);
 
     function toggleTeamMember(memberId: string) {
         setSelectedTeamIds(prev => {
@@ -260,6 +261,16 @@ export function ScrimDetail({
     const isOrgChallenge = !!myInvitation && !!myInvitation.organization;
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
     const roster = isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
+
+    // Captain doesn't have to be one of the 6 players actually scheduled to play — the
+    // accepter might be a manager handling logistics for someone else. Any active,
+    // verified org member is eligible; unverified (admin-created stub) accounts are not.
+    const captainCandidates = isOrgChallenge
+        ? activeOrgMembers.filter(m => m.user.verified).map(m => ({ id: m.user._id, name: m.user.name }))
+        : (liveTeam?.members ?? []).map(m => ({ id: m.userId, name: m.name }));
+    const captainId = manualCaptainId && captainCandidates.some(c => c.id === manualCaptainId)
+        ? manualCaptainId
+        : (userId && captainCandidates.some(c => c.id === userId) ? userId : null);
 
     const rankAverageMMR = getRankAverages();
     const rankAverage = getRankByMMR(rankAverageMMR)
@@ -388,9 +399,9 @@ export function ScrimDetail({
     }
 
     function handleAcceptChallenge() {
-        if (!userId) return;
+        if (!userId || !captainId) return;
         setInviteStatus(InvitationStatus.Accepted);
-        handleAction(acceptChallengeWithRosterAction(scrim._id, userId, roster, isOrgChallenge ? myOrg?.name : liveTeam?.name));
+        handleAction(acceptChallengeWithRosterAction(scrim._id, userId, roster, isOrgChallenge ? myOrg?.name : liveTeam?.name, captainId));
     }
 
     function handleDeclineChallenge() {
@@ -852,10 +863,49 @@ export function ScrimDetail({
                         </div>
                     )}
 
+                    {roster.length === 6 && (
+                        <div className="space-y-2 pt-2 border-t border-edge">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Scrimmage Captain</h3>
+                                {!captainId && <span className="text-[11px] text-danger font-medium">Select a captain</span>}
+                            </div>
+                            <p className="text-[11px] text-dimmed leading-relaxed">
+                                The captain runs the scrimmage on your side — readying up, submitting match IDs, and setting the party code.
+                                They don&apos;t need to be one of the 6 playing — pick whoever will actually be around for it, even if that isn&apos;t you.
+                            </p>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {captainCandidates.map(member => {
+                                    const selected = captainId === member.id;
+                                    return (
+                                        <button
+                                            key={member.id}
+                                            type="button"
+                                            onClick={() => setManualCaptainId(member.id)}
+                                            className={cn(
+                                                "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
+                                                selected
+                                                    ? "border-primary/40 bg-primary/5 text-foreground"
+                                                    : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20"
+                                            )}
+                                        >
+                                            <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                                {member.name.charAt(0)}
+                                            </div>
+                                            <span className="font-medium flex-1 text-xs truncate">{member.name}</span>
+                                            {selected && (
+                                                <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded uppercase tracking-wider shrink-0">C</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-3">
                         <Button
                             onClick={handleAcceptChallenge}
-                            disabled={pending || roster.length < 6}
+                            disabled={pending || roster.length < 6 || !captainId}
                         >
                             Accept Challenge
                         </Button>

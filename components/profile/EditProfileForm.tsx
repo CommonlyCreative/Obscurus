@@ -64,10 +64,10 @@ export function EditProfileForm({
     const [showReauthDialog, setShowReauthDialog] = useState(false);
     const autoDisconnectAttempted = useRef(false);
 
-    function toggleHero(id: number) {
+    function toggleHero(id: number, value?: boolean) {
         setSelectedHeroes((prev) => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            next.has(id) && value !== true ? next.delete(id) : value === true || !next.has(id) ? next.add(id) : null;
             return next;
         });
     }
@@ -285,6 +285,16 @@ export function EditProfileForm({
                 title="Heroes"
                 subtitle={`Select the heroes you play. ${selectedHeroes.size} selected.`}
             >
+                <button
+                                type="button"
+                                onClick={() => heroes.forEach(h => toggleHero(h.id, selectedHeroes.size !== heroes.length))}
+                                className={cn(
+                                    "px-2.5 py-1 rounded text-xs font-medium border transition-colors",
+                                    "border-primary/25 bg-primary/5 text-dimmed hover:border-primary/40 hover:text-foreground",
+                                )}
+                            >
+                                Select All
+                            </button>
                 <div className="flex flex-wrap gap-1.5">
                     {heroes.map((hero) => {
                         const selected = selectedHeroes.has(hero.id);

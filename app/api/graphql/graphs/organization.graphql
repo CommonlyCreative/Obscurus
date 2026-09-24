@@ -22,6 +22,8 @@ type Organization {
     blocks: [AvailabilityBlock!]!
     artificial: Boolean!                # true = created outright by an admin (no real submitter);
                                          # false = created from an approved org request (a real user's org)
+    disbanded: Boolean!                 # true = soft-disbanded; the org record is kept as a tombstone
+    disbandedAt: Timestamp              # Set when disbanded
     createdAt: Timestamp!
     updatedAt: Timestamp!
 }
@@ -124,7 +126,9 @@ extend type Mutation {
     # Org lifecycle (only users with platform Role.MEMBER+ can create an org)
     createOrganization(owner_id: String!, input: CreateOrganizationInput!): Organization
     updateOrganization(org_id: String!, input: UpdateOrganizationInput!): Organization
-    deleteOrganization(org_id: String!): Boolean
+    # Soft-disband: flags the org (kept as a tombstone), frees its members to join other
+    # orgs, and clears the owner's approved org request so they may request a new org.
+    disbandOrganization(org_id: String!): Boolean
     transferOwnership(org_id: String!, new_owner_id: String!): Organization
 
     # Membership — manager-only operations

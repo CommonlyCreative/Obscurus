@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { SectionCard } from "@/components/shared/SectionCard";
-import { OrgRole } from "@/app/api/graphql/types/graphql";
+import { OrgRole, Role } from "@/app/api/graphql/types/graphql";
 import { ArrayElement, cn } from "@/lib/utils";
 import {
     setCoreTeamAction,
@@ -42,6 +42,7 @@ import {
 import { InputGroupAddon } from "@/components/ui/input-group";
 import { UserPlus, UserRoundPlus } from "lucide-react";
 import type { ManagedOrg, OrgMemberEntry, OrgUserSearch } from "./types";
+import { authClient } from "@/lib/database/auth-client";
 
 export function OrgManagePanel({
     org,
@@ -52,6 +53,7 @@ export function OrgManagePanel({
     users: OrgUserSearch;
     currentUserId: string;
 }) {
+    const { data: session } = authClient.useSession();
     const router = useRouter();
 
     const [coreTeamIds, setCoreTeamIds] = useState<Set<string>>(new Set(org.coreTeamIds));
@@ -553,7 +555,7 @@ export function OrgManagePanel({
             </SectionCard>
 
             {/* Dev Tools */}
-            <SectionCard
+            {session && session.user.role === Role.Admin && <SectionCard
                 title="Developer Tools"
                 subtitle="Shortcuts for local development only. Do not use in production."
             >
@@ -572,13 +574,15 @@ export function OrgManagePanel({
                 <p className="text-xs text-muted">
                     Adds fake members to reach 6 active players and fills the core team. Fillers are named <span className="font-mono">[FILLER] Player N</span> and can be removed individually.
                 </p>
-            </SectionCard>
+            </SectionCard>}
 
             {/* Danger Zone — owner only */}
             {org.ownerId === currentUserId && (
                 <SectionCard title="Danger Zone">
                     <p className="text-xs text-muted">
-                        Permanently disbands <span className="text-foreground font-medium">{org.name}</span> and removes all members. This cannot be undone.
+                        Disbands <span className="text-foreground font-medium">{org.name}</span> and frees all members
+                        to join other organizations. This cannot be undone, though the organization record itself is
+                        kept — you&apos;ll be free to request a new one.
                     </p>
                     <div className="flex items-center gap-3">
                         <Dialog>
@@ -595,7 +599,9 @@ export function OrgManagePanel({
                                 <DialogHeader>
                                     <DialogTitle>Disband {org.name}?</DialogTitle>
                                     <DialogDescription>
-                                        This will permanently delete the organization and remove all {members.length} member{members.length !== 1 ? "s" : ""}. There is no way to undo this.
+                                        This will free all {members.length} member{members.length !== 1 ? "s" : ""} to join
+                                        other organizations and clear your approved org request, so you can submit a new
+                                        one if you choose. There is no way to undo this.
                                     </DialogDescription>
                                 </DialogHeader>
                                 <DialogFooter className="sm:justify-start">

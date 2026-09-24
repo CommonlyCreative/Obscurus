@@ -78,6 +78,7 @@ const GetScrimmageQuery = graphql(`
                         user {
                             _id
                             name
+                            verified
                             stats {
                                 mmr
                             }

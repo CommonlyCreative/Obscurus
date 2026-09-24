@@ -89,6 +89,8 @@ const AdminOrganizationsQuery = graphql(`
         timesheets { startTime endTime }
       }
       artificial
+      disbanded
+      disbandedAt
       createdAt
       updatedAt
     }
@@ -112,7 +114,7 @@ const AdminRemoveOrgMemberMutation = graphql(`
 
 const AdminDisbandOrganizationMutation = graphql(`
   mutation AdminDisbandOrganization($org_id: String!) {
-    deleteOrganization(org_id: $org_id)
+    disbandOrganization(org_id: $org_id)
   }
 `);
 
@@ -498,6 +500,8 @@ export type AdminOrgRow = {
     coreTeamIds: string[];
     memberCount: number;
     artificial: boolean;
+    disbanded: boolean;
+    disbandedAt: number | null;
     blocks: AdminOrgBlock[];
     createdAt: number;
     updatedAt: number;
@@ -525,6 +529,8 @@ export async function getOrganizationsAdminAction(): Promise<AdminOrgRow[]> {
             coreTeamIds: org.coreTeam.map((u) => u._id),
             memberCount: org.members.filter((m) => m.status === "ACTIVE").length,
             artificial: org.artificial,
+            disbanded: org.disbanded,
+            disbandedAt: org.disbandedAt ?? null,
             blocks: org.blocks.map((b) => ({
                 day: b.day,
                 timesheets: b.timesheets?.map((t) => ({ startTime: t.startTime, endTime: t.endTime })) ?? null,

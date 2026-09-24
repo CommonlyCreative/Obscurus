@@ -7,6 +7,8 @@ type OrgHeaderData = {
     slug: string;
     description?: string | null;
     createdAt: number;
+    disbanded?: boolean;
+    disbandedAt?: number | null;
     members: Array<{ status: string }>;
 };
 
@@ -31,6 +33,11 @@ export function OrgHeader({
                             <div className="flex items-center gap-2.5 flex-wrap">
                                 <h1 className="text-2xl font-black text-foreground">{org.name}</h1>
                                 <span className="text-sm font-mono text-muted">[{org.slug}]</span>
+                                {org.disbanded && (
+                                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-edge text-muted border-edge uppercase tracking-wider">
+                                        Disbanded
+                                    </span>
+                                )}
                             </div>
                             {org.description && (
                                 <p className="text-sm text-dimmed mt-1 max-w-lg leading-relaxed">
@@ -45,10 +52,18 @@ export function OrgHeader({
                                 <span className="text-xs text-muted">
                                     Founded {formatTimeAgo(new Date(org.createdAt))}
                                 </span>
+                                {org.disbanded && org.disbandedAt && (
+                                    <>
+                                        <span className="text-edge">·</span>
+                                        <span className="text-xs text-muted">
+                                            Disbanded {formatTimeAgo(new Date(org.disbandedAt))}
+                                        </span>
+                                    </>
+                                )}
                             </div>
                         </div>
                     </div>
-                    {isManager && (
+                    {isManager && !org.disbanded && (
                         <Link
                             href={`/org/${org.slug}/manage`}
                             className="shrink-0 px-4 py-2 text-sm font-semibold border border-edge rounded-lg text-muted hover:text-foreground hover:border-foreground/20 transition-colors"

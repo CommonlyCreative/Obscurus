@@ -28,7 +28,7 @@ async function SearchContent() {
     ]);
 
     const users: SearchPageQuery["getUsers"] = (data.getUsers ?? []).filter(u => u.verified);
-    const orgs: SearchPageQuery["getOrganizations"] = data.getOrganizations ?? [];
+    const orgs: SearchPageQuery["getOrganizations"] = (data.getOrganizations ?? []).filter(o => !o.disbanded);
     const scrimmages: SearchPageQuery["getScrimmages"] = data.getScrimmages ?? [];
 
     const statsMap = new Map<string, { wins: number; total: number }>();

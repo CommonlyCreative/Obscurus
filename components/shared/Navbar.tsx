@@ -31,6 +31,7 @@ export function Navbar() {
     const router = useRouter();
     const [avatarOpen, setAvatarOpen] = useState(false);
     const [inScrim, setInScrim] = useState(false);
+    const [orgSlug, setOrgSlug] = useState<string | null>(null);
     const avatarRef = useRef<HTMLDivElement>(null);
 
     const user = session?.user as User | undefined;
@@ -59,6 +60,7 @@ export function Navbar() {
             setInScrim(u.scrimmages.some(
                 s => s.status !== ScrimmageStatus.Completed && s.status !== ScrimmageStatus.Cancelled
             ));
+            setOrgSlug(u.organization?.slug ?? null);
         });
     }, [user]);
 
@@ -185,6 +187,15 @@ export function Navbar() {
                                                     >
                                                         My Profile
                                                     </Link>
+                                                    {orgSlug && (
+                                                        <Link
+                                                            href={`/org/${orgSlug}`}
+                                                            onClick={() => setAvatarOpen(false)}
+                                                            className="flex items-center gap-2.5 px-4 py-2 text-sm text-dimmed hover:text-foreground hover:bg-surface-2 transition-colors"
+                                                        >
+                                                            My Org
+                                                        </Link>
+                                                    )}
 
                                                     {teamFull && !inScrim && (
                                                         <Link
@@ -281,6 +292,15 @@ export function Navbar() {
                                 >
                                     My Profile
                                 </Link>
+                                {orgSlug && (
+                                    <Link
+                                        href={`/org/${orgSlug}`}
+                                        className="block px-3 py-2 text-sm text-dimmed hover:text-foreground hover:bg-surface-2 rounded transition-colors"
+                                        onClick={() => setMobileOpen(false)}
+                                    >
+                                        My Org
+                                    </Link>
+                                )}
                                 {isAdmin && (
                                     <Link
                                         href="/admin"

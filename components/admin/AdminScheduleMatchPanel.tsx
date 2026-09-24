@@ -23,8 +23,8 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
     const router = useRouter();
     const [open, setOpen] = useState(false);
 
-    const realOrgs = useMemo(() => organizations.filter((o) => !o.artificial), [organizations]);
-    const artificialOrgs = useMemo(() => organizations.filter((o) => o.artificial), [organizations]);
+    const realOrgs = useMemo(() => organizations.filter((o) => !o.artificial && !o.disbanded), [organizations]);
+    const artificialOrgs = useMemo(() => organizations.filter((o) => o.artificial && !o.disbanded), [organizations]);
 
     const [hostOrgId, setHostOrgId] = useState("");
     const [hostLeaderId, setHostLeaderId] = useState("");

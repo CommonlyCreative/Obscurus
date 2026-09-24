@@ -37,9 +37,9 @@ const CreatePlaceholderPlayerMutation = graphql(`
   }
 `);
 
-const DeleteOrganizationMutation = graphql(`
+const DisbandOrganizationMutation = graphql(`
   mutation ManageDisbandOrganization($org_id: String!) {
-    deleteOrganization(org_id: $org_id)
+    disbandOrganization(org_id: $org_id)
   }
 `);
 
@@ -108,8 +108,8 @@ export async function createPlaceholderPlayerAction(
 }
 
 export async function disbandOrganizationAction(orgId: string) {
-    const result = await grafbase.request(DeleteOrganizationMutation, { org_id: orgId });
-    return result.deleteOrganization;
+    const result = await grafbase.request(DisbandOrganizationMutation, { org_id: orgId });
+    return result.disbandOrganization;
 }
 
 export async function removeMemberAction(orgId: string, userId: string) {

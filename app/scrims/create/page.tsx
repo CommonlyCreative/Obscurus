@@ -30,6 +30,7 @@ const CreateScrimPageQuery = graphql(`
           user {
             _id
             name
+            verified
             stats {
               rank {
                 name
@@ -55,6 +56,7 @@ const CreateScrimPageQuery = graphql(`
             name
         }
         slug
+        disbanded
         blocks {
             day
             timesheets {

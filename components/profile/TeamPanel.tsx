@@ -454,7 +454,7 @@ export function TeamPanel({
                             <>
                                 <div className="px-5 py-4 border-b border-edge">
                                     <div className="text-sm font-bold text-foreground">Organization</div>
-                                    <div className="text-xs text-muted mt-0.5">Persistent team membership</div>
+                                    <div className="text-xs text-muted mt-0.5">Official Scrimmage Team</div>
                                 </div>
                                 <div className="p-8 flex flex-col items-center gap-3 text-center">
                                     {isOwner ? (

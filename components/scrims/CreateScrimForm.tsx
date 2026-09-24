@@ -64,7 +64,10 @@ export const ENDTIME_CONVERSION = {
 
 export type ScrimmageTarget = { user_id: string, org: { id: string, name: string } | null };
 
-export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
+export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbanded }: Props) {
+    // Disbanded orgs are kept on record (soft-disbanded), not deleted — never offer one
+    // as an opponent to schedule against or an availability calendar to check.
+    const orgs = orgsWithDisbanded?.filter((o) => !o.disbanded) ?? null;
     const router = useRouter();
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
@@ -107,7 +110,18 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
         : (liveTeam?.members.map((m) => m.userId) ?? []);
 
     const rosterFull = rosterIds.length === 6;
-    const canSubmit = rosterFull && (!isPrivate || target !== null) &&
+
+    // Captain — doesn't have to be one of the 6 actually playing (e.g. a manager
+    // handling logistics). Unverified (admin-created stub) accounts are never eligible.
+    const [manualLeaderId, setManualLeaderId] = useState<string | null>(null);
+    const leaderCandidates = useOrgRoster
+        ? (org?.members ?? []).filter((m) => m.user.verified).map((m) => ({ id: m.user._id, name: m.user.name }))
+        : (liveTeam?.members ?? []).map((m) => ({ id: m.userId, name: m.name }));
+    const leaderId = manualLeaderId && leaderCandidates.some((c) => c.id === manualLeaderId)
+        ? manualLeaderId
+        : (leaderCandidates.some((c) => c.id === userId) ? userId : null);
+
+    const canSubmit = rosterFull && !!leaderId && (!isPrivate || target !== null) &&
         !(scheduled && !scheduledDate);
 
     function resetForm() {
@@ -121,11 +135,12 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
         setScheduled(false);
         setScheduledDate("");
         setRoster(initialRoster);
+        setManualLeaderId(null);
         setError(null);
     }
 
     function handleSubmit() {
-        if (!canSubmit || isPending) return;
+        if (!canSubmit || isPending || !leaderId) return;
         setError(null);
 
         startTransition(async () => {
@@ -150,6 +165,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     note,
                     isPrivate,
                     host_id: userId,
+                    leaderId,
                     wagerAmount,
                     hostOrgId: orgAffiliated && org ? org._id : null,
                     roster: rosterIds,
@@ -210,7 +226,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                                 {priv ? "Private" : "Public"}
                             </div>
                             <div className="text-xs text-muted mt-0.5">
-                                {priv ? "Challenge a specific team · wagers allowed" : "Open to any team · no wagers"}
+                                {priv ? "Challenge a specific team" : "Open to any team"}
                             </div>
                         </button>
                     ))}
@@ -277,7 +293,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
             </SectionCard>
 
             {/* ── Private: wager ── */}
-            {isPrivate && (
+            {false && (
                 <SectionCard title="Wager">
                     <div className="flex items-center gap-3">
                         <input
@@ -338,6 +354,45 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                                     members={org.members}
                                     onChange={setRoster}
                                 />
+                            </div>
+
+                            {/* Captain */}
+                            <div className="space-y-3 pt-2 border-t border-edge">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-foreground">Captain</h3>
+                                    {!leaderId && <span className="text-xs text-danger font-medium">Select a captain</span>}
+                                </div>
+                                <p className="text-xs text-muted">
+                                    Runs the match — ready up, submit match IDs, and sets the party code.
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    {leaderCandidates.length === 0 ? (
+                                        <p className="text-xs text-muted italic col-span-3">No verified active members available.</p>
+                                    ) : leaderCandidates.map((member) => {
+                                        const selected = leaderId === member.id;
+                                        return (
+                                            <button
+                                                key={member.id}
+                                                type="button"
+                                                onClick={() => setManualLeaderId(member.id)}
+                                                className={cn(
+                                                    "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
+                                                    selected
+                                                        ? "border-primary/40 bg-primary/5 text-foreground"
+                                                        : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20"
+                                                )}
+                                            >
+                                                <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                                    {member.name.charAt(0)}
+                                                </div>
+                                                <span className="font-medium flex-1 text-xs truncate">{member.name}</span>
+                                                {selected && (
+                                                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded uppercase tracking-wider shrink-0">C</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
 
                             {isPrivate && (
@@ -423,27 +478,48 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                         subtitle="Your current online team will be used as the roster."
                     >
                         {liveTeam ? (
-                            <div className="space-y-1.5">
-                                {liveTeam.members.map((m, i) => {
-                                    const rank = getRankByMMR(m.mmr)
-                                    return (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-surface-2 border border-edge"
-                                        >
-                                            <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-foreground shrink-0">
-                                                {m.name.charAt(0)}
-                                            </div>
-                                            <span className="text-sm text-foreground flex-1 truncate">{m.name}</span>
-                                            {rank && <span className="text-xs text-muted">{`${rank.rank.name} ${rank.division}`}</span>}
-                                        </div>
-                                    )
-                                })}
-                                {liveTeam.members.length < 6 && (
-                                    <p className="text-xs text-danger pt-1">
-                                        Need {6 - liveTeam.members.length} more player
-                                        {6 - liveTeam.members.length !== 1 ? "s" : ""} to create a scrimmage.
-                                    </p>
+                            <div className="space-y-4">
+                                <div className="space-y-1.5">
+                                    {liveTeam.members.map((m, i) => {
+                                        const rank = getRankByMMR(m.mmr)
+                                        const selected = leaderId === m.userId;
+                                        return (
+                                            <button
+                                                key={i}
+                                                type="button"
+                                                onClick={() => setManualLeaderId(m.userId)}
+                                                className={cn(
+                                                    "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-colors",
+                                                    selected
+                                                        ? "border-primary/40 bg-primary/5"
+                                                        : "bg-surface-2 border-edge hover:border-foreground/20"
+                                                )}
+                                            >
+                                                <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-xs font-bold text-foreground shrink-0">
+                                                    {m.name.charAt(0)}
+                                                </div>
+                                                <span className="text-sm text-foreground flex-1 truncate">{m.name}</span>
+                                                {rank && <span className="text-xs text-muted">{`${rank.rank.name} ${rank.division}`}</span>}
+                                                {selected && (
+                                                    <span className="text-[9px] font-bold text-primary bg-primary/10 px-1 py-0.5 rounded uppercase tracking-wider shrink-0">C</span>
+                                                )}
+                                            </button>
+                                        )
+                                    })}
+                                    {liveTeam.members.length < 6 && (
+                                        <p className="text-xs text-danger pt-1">
+                                            Need {6 - liveTeam.members.length} more player
+                                            {6 - liveTeam.members.length !== 1 ? "s" : ""} to create a scrimmage.
+                                        </p>
+                                    )}
+                                </div>
+                                {liveTeam.members.length > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-muted">
+                                            Tap a player to make them captain — they&apos;ll run the match (ready up, submit match IDs, set the party code).
+                                        </p>
+                                        {!leaderId && <span className="text-xs text-danger font-medium shrink-0 ml-2">Select a captain</span>}
+                                    </div>
                                 )}
                             </div>
                         ) : (
@@ -487,9 +563,11 @@ export function CreateScrimForm({ userId, org, isManager, orgs }: Props) {
                     <span className="text-xs text-muted">
                         {!rosterFull
                             ? "Roster needs 6 players"
-                            : isPrivate && !target
-                                ? "Select a target team"
-                                : "Set a scheduled time"}
+                            : !leaderId
+                                ? "Select a captain"
+                                : isPrivate && !target
+                                    ? "Select a target team"
+                                    : "Set a scheduled time"}
                     </span>
                 )}
             </div>

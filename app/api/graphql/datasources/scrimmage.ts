@@ -144,7 +144,7 @@ export class ScrimmageDataSource {
         const scrimmage: DBScrimmage = {
             _id: new ObjectId(),
             host: input.host_id,           // caller must set host in the resolver via context
-            hostTeam: { leader: input.host_id, members: clean.team ?? [] },
+            hostTeam: { leader: clean.leader_id ?? input.host_id, members: clean.team ?? [] },
             region: "NA",
             status: initialStatus(input),
             isPrivate: input.isPrivate,
@@ -494,6 +494,54 @@ export class ScrimmageDataSource {
         );
 
         // Re-fetch to compute series result
+        const updated = await this.getScrimmage(scrimmageId);
+        if (!updated) return null;
+
+        const seriesResult = computeSeriesResult(updated.matches, updated.bestOf ?? BestOf.One);
+        if (seriesResult !== null) {
+            return this.patch(scrimmageId, {
+                result: seriesResult,
+                status: seriesResult === ScrimmageResult.Cancelled
+                    ? ScrimmageStatus.Cancelled
+                    : ScrimmageStatus.Completed,
+            });
+        }
+
+        return updated;
+    }
+
+    // Applies a freshly-resolved result to a match that's currently INCONCLUSIVE and
+    // re-runs the series tally — same mechanics as submitMatchResult, but callable
+    // regardless of the scrimmage's current status (COMPLETED included) since an
+    // inconclusive game may have already forced a premature Draw via computeSeriesResult's
+    // "all slots played" fallback. Win counts only ever increase when reconciling, so this
+    // can correct a stale Draw into a real HOST_WIN/OPPONENT_WIN but never has to revert an
+    // already-decided series back to ACTIVE.
+    async reconcileMatchResult(
+        scrimmageId: string,
+        matchNumber: number,
+        result: MatchResult,
+    ): Promise<WithId<DBScrimmage> | null> {
+        const scrim = await this.getScrimmage(scrimmageId);
+        if (!scrim) throw new Error("Scrimmage not found");
+        if (scrim.status === ScrimmageStatus.Cancelled) return scrim;
+
+        const matchIdx = scrim.matches.findIndex(m => m.number === matchNumber);
+        if (matchIdx === -1) throw new Error(`Match ${matchNumber} not found`);
+        if (scrim.matches[matchIdx].result !== MatchResult.Inconclusive) return scrim;
+
+        const concludedAt = now();
+        await this.collection.updateOne(
+            { _id: new ObjectId(scrimmageId) },
+            {
+                $set: {
+                    [`matches.${matchIdx}.result`]: result,
+                    [`matches.${matchIdx}.concludedAt`]: concludedAt,
+                    updatedAt: concludedAt,
+                },
+            }
+        );
+
         const updated = await this.getScrimmage(scrimmageId);
         if (!updated) return null;
 

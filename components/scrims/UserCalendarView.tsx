@@ -72,7 +72,7 @@ export function UserCalendarView({ userId }: { userId: string }) {
                     href={`/profile/${userId}/edit`}
                     className="text-xs font-semibold text-primary hover:text-primary-dim transition-colors"
                 >
-                    Connect in Edit Profile →
+                    Connect in your Profile →
                 </a>
             </div>
         );

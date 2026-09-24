@@ -33,6 +33,7 @@ export interface CreateScrimPayload {
     isPrivate: boolean;
     wagerAmount: number;
     host_id: string;
+    leaderId: string | null;
     hostOrgId: string | null;
     roster: string[];
     targetLeaderId: string | null;
@@ -58,6 +59,7 @@ export async function createScrimmageAction(payload: CreateScrimPayload) {
             note: payload.note || undefined,
             isPrivate: payload.isPrivate,
             host_id: payload.host_id,
+            leader_id: payload.leaderId ?? undefined,
             hostOrg_id: payload.hostOrgId ?? undefined,
             scheduledAt: payload.scheduledAt ?? undefined,
             wagerAmount: payload.wagerAmount,

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MatchLookupResult } from "@/lib/actions/deadlockMatchCache";
 import { ChevronLeft, Swords, Target, Heart, Coins } from "lucide-react";
-import { getMatch } from "@/app/scrims/[id]/actions";
+import { getMatch, reconcileMatchResultAction } from "@/app/scrims/[id]/actions";
 import { cn } from "@/lib/utils";
 import { MatchResult } from "@/app/api/graphql/types/graphql";
 import { useRouter } from "next/navigation";
@@ -14,13 +14,27 @@ type TeamDisplay = {
     id: number
 }
 
+type ReconciledScrim = NonNullable<Awaited<ReturnType<typeof reconcileMatchResultAction>>>;
+
 const MVP_RANK_STYLE: Record<number, { label: string; text: string; badge: string; ring: string }> = {
     1: { label: "MVP", text: "text-[#f0e463]", badge: "bg-[#f0e463] text-black", ring: "border-[#f0e463]/50" },
     2: { label: "2nd", text: "text-[#cbd5e1]", badge: "bg-[#cbd5e1] text-black", ring: "border-[#cbd5e1]/50" },
     3: { label: "3rd", text: "text-[#c7893f]", badge: "bg-[#c7893f] text-black", ring: "border-[#c7893f]/50" },
 };
 
-function MatchData({ match_id, result }: { match_id: string, result: MatchResult }) {
+function MatchData({
+    scrimmageId,
+    match_number,
+    match_id,
+    result,
+    onReconciled,
+}: {
+    scrimmageId: string,
+    match_number: number,
+    match_id: string,
+    result: MatchResult,
+    onReconciled?: (data: ReconciledScrim) => void,
+}) {
     const router = useRouter();
     const [metadata, setMetadata] = useState<MatchLookupResult | null>(null);
     const [enrichedPlayers, setEnrichedPlayers] = useState<EnrichedPlayer[] | null>(null);
@@ -37,6 +51,13 @@ function MatchData({ match_id, result }: { match_id: string, result: MatchResult
             if ("match_info" in match && match.match_info.players) {
                 const players = await getMatchPlayersData(match_id, match.match_info.players);
                 setEnrichedPlayers(players);
+            }
+            // Only ever re-attempted when this match view (re)mounts — e.g. a page
+            // refresh — never polled, so a match stuck INCONCLUSIVE costs nothing
+            // beyond the one metadata check already made to render this tab.
+            if (result === MatchResult.Inconclusive && "match_info" in match) {
+                const updated = await reconcileMatchResultAction(scrimmageId, match_number);
+                if (updated) onReconciled?.(updated);
             }
         });
     }, [match_id]);

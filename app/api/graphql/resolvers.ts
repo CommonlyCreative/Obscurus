@@ -10,7 +10,7 @@ import { DBTransaction } from "./datasources/transaction";
 import {
     User, Scrimmage, Match, Transaction, Organization, OrganizationMember,
     Wager, CreditTransaction, CreditPurchase, StripeEvent,
-    WagerStatus, CreditTxType, MatchSide, ScrimmageResult,
+    WagerStatus, CreditTxType, MatchSide, MatchResult, ScrimmageResult,
     Resolvers,
     Customer,
     ScrimmageStatus,
@@ -19,7 +19,8 @@ import {
 } from "./server";
 import { asyncMap } from "@/lib/utils";
 import { getDeadlockRank } from "@/lib/actions/deadlockapi";
-import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
+import { fetchMatchMetadata } from "@/lib/actions/deadlockMatchCache";
+import { convertSteam32toSteam64, convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
 import { convertServerPatchToFullTree } from "next/dist/client/components/segment-cache/navigation";
 
 const TimestampScalar = new GraphQLScalarType({
@@ -546,6 +547,52 @@ export const resolvers: Resolvers = {
         submitMatchResult: async (_, { scrimmage_id, match_number, deadlock_match_id, result }, { dataSources: { scrimmages } }) => {
             return scrimmages.submitMatchResult(scrimmage_id, match_number, deadlock_match_id, result) as any;
         },
+        reconcileMatchResult: async (_, { scrimmage_id, match_number }, { dataSources: { scrimmages, users } }) => {
+            const scrim = await scrimmages.getScrimmage(scrimmage_id);
+            if (!scrim) throw new Error("Scrimmage not found");
+
+            const match = scrim.matches.find(m => m.number === match_number);
+            if (!match || match.result !== MatchResult.Inconclusive || !match.match_id) {
+                return scrim as any as Scrimmage;
+            }
+
+            // Still not available — cheap no-op; nothing is written, and
+            // fetchMatchMetadata's own cache keeps repeat checks from hammering
+            // the Deadlock API while it's rate-limited or the match hasn't posted yet.
+            const metadata = await fetchMatchMetadata(match.match_id);
+            if ("errorMessage" in metadata) return scrim as any as Scrimmage;
+
+            // Figure out which in-game team (0 or 1) was "host" by cross-referencing
+            // the match's players against the two rosters via linked Steam accounts —
+            // Deadlock team numbers aren't tied to host/opponent identity on their own.
+            const hostIds = new Set(scrim.hostTeam.members);
+            const rosterIds = [...scrim.hostTeam.members, ...(scrim.opponentTeam?.members ?? [])]
+                .map(id => new ObjectId(id));
+            const roster = await users.getUsers(rosterIds).toArray();
+
+            const sideBySteamId = new Map<string, "host" | "opponent">();
+            for (const u of roster) {
+                if (!u.steam?.id) continue;
+                sideBySteamId.set(u.steam.id, hostIds.has(u._id.toString()) ? "host" : "opponent");
+            }
+
+            const hostCountByTeam = { 0: 0, 1: 0 };
+            for (const player of metadata.match_info.players) {
+                if (player.team !== 0 && player.team !== 1) continue;
+                if (sideBySteamId.get(convertSteam32toSteam64(player.account_id)) === "host") {
+                    hostCountByTeam[player.team]++;
+                }
+            }
+            const hostTeamNumber = hostCountByTeam[0] >= hostCountByTeam[1] ? 0 : 1;
+
+            const wt = metadata.match_info.winning_team;
+            const result: MatchResult =
+                wt !== 0 && wt !== 1 ? MatchResult.Draw
+                    : wt === hostTeamNumber ? MatchResult.HostWin
+                        : MatchResult.OpponentWin;
+
+            return scrimmages.reconcileMatchResult(scrimmage_id, match_number, result) as any as Scrimmage;
+        },
         endScrimmage: async (_, { scrimmage_id }, { dataSources: { scrimmages } }) => {
             return scrimmages.endScrimmage(scrimmage_id) as any;
         },
@@ -578,13 +625,16 @@ export const resolvers: Resolvers = {
         updateOrganization: async (_, { org_id, input }, { dataSources: { organizations } }) => {
             return organizations.updateOrganization(org_id, input) as any as Promise<Organization | null>;
         },
-        deleteOrganization: async (_, { org_id }, { dataSources: { organizations, users } }) => {
+        disbandOrganization: async (_, { org_id }, { dataSources: { organizations, users, orgRequests } }) => {
             const org = await organizations.getOrganization(org_id);
-            for (const member of org?.members ?? []) {
+            if (!org) return false;
+            for (const member of org.members ?? []) {
                 const deleted = await users.deleteIfGhost(member.user);
                 if (!deleted) await users.addOrganizationToUser(member.user, "");
             }
-            return organizations.deleteOrganization(org_id);
+            // Frees the owner to submit a new org request now that this one is disbanded.
+            await orgRequests.deleteApprovedRequest(org.owner);
+            return organizations.disbandOrganization(org_id);
         },
         transferOwnership: async (_, { org_id, new_owner_id }, { dataSources: { organizations } }) => {
             return organizations.transferOwnership(org_id, new_owner_id) as any as Promise<Organization | null>;

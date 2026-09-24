@@ -146,6 +146,7 @@ enum MatchResult {
     HOST_WIN
     OPPONENT_WIN
     DRAW
+    INCONCLUSIVE
     CANCELLED
 }
 
@@ -194,6 +195,7 @@ input CreateScrimmageInput {
     team: [String!]!             # Host roster: exactly 6 user IDs
     note: String
     host_id: String!
+    leader_id: String            # Captain who runs the match — defaults to host_id if omitted; need not be on the roster
     isPrivate: Boolean!
     opponentOrg_id: String         # Required when isPrivate = true
     scheduledAt: Timestamp             # Omit for ASAP scrimmages
@@ -305,6 +307,12 @@ extend type Mutation {
     startMatch(scrimmage_id: String!): Scrimmage
     cancelMatch(scrimmage_id: String!): Scrimmage
     submitMatchResult(scrimmage_id: String!, match_number: Int!, deadlock_match_id: String!, result: MatchResult!): Scrimmage
+
+    # Re-attempts a match whose result is INCONCLUSIVE (the Deadlock API had no data for
+    # it when it was first submitted). Refetches the match metadata; if it's available
+    # now, determines the real victor/loser and re-runs the series tally. A no-op if the
+    # match isn't INCONCLUSIVE or the metadata still isn't ready — cheap to call freely.
+    reconcileMatchResult(scrimmage_id: String!, match_number: Int!): Scrimmage
 
     # End the scrimmage early — available to either leader when no match is in progress
     endScrimmage(scrimmage_id: String!): Scrimmage

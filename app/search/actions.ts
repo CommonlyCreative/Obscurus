@@ -24,6 +24,7 @@ const SearchPageQuery = graphql(`
             _id
             name
             slug
+            disbanded
             members {
                 status
             }

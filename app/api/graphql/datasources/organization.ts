@@ -104,6 +104,7 @@ export class OrganizationDataSource {
             coreTeam: [],
             blocks: [],
             artificial: input.artificial ?? false,
+            disbanded: false,
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };
@@ -123,9 +124,23 @@ export class OrganizationDataSource {
         return org;
     }
 
-    async deleteOrganization(org_id: ObjectId | string): Promise<boolean> {
-        const result = await this.collection.deleteOne({ _id: new ObjectId(org_id) });
-        return result.deletedCount > 0;
+    // Soft-disband: the org record is kept as a tombstone (flagged, not deleted) so its
+    // history stays intact. Every member is flipped to INACTIVE on the org's own side —
+    // not removed from the array — which is what actually frees them from the
+    // one-org-per-profile constraint (getOrganizationByMember only matches ACTIVE/INVITED).
+    async disbandOrganization(org_id: ObjectId | string): Promise<boolean> {
+        const result = await this.collection.updateOne(
+            { _id: new ObjectId(org_id) },
+            {
+                $set: {
+                    disbanded: true,
+                    disbandedAt: Date.now(),
+                    updatedAt: Date.now(),
+                    "members.$[].status": OrgMemberStatus.Inactive,
+                },
+            }
+        );
+        return result.modifiedCount > 0;
     }
 
     async transferOwnership(org_id: ObjectId | string, new_owner_id: string): Promise<DBOrganization | null> {
