@@ -37,6 +37,15 @@ const CreatePlaceholderPlayerMutation = graphql(`
   }
 `);
 
+const UpdateOrgRegionMutation = graphql(`
+  mutation ManageUpdateOrgRegion($org_id: String!, $input: UpdateOrganizationInput!) {
+    updateOrganization(org_id: $org_id, input: $input) {
+      _id
+      region
+    }
+  }
+`);
+
 const DisbandOrganizationMutation = graphql(`
   mutation ManageDisbandOrganization($org_id: String!) {
     disbandOrganization(org_id: $org_id)
@@ -82,7 +91,7 @@ export async function inviteMemberAction(orgId: string, userId: string, orgRole:
 
 export interface CreatePlaceholderPlayerPayload {
     name: string;
-    email: string;
+    email?: string;
 }
 
 export interface CreatedPlaceholderMember {
@@ -100,11 +109,15 @@ export async function createPlaceholderPlayerAction(
     const result = await grafbase.request(CreatePlaceholderPlayerMutation, {
         org_id: orgId,
         orgRole,
-        input,
+        input: { name: input.name, email: input.email?.trim() || undefined },
     });
     const member = result.createPlaceholderPlayer;
     if (!member) throw new Error("Failed to create player");
     return { _id: member.user._id, name: member.user.name, orgRole: member.orgRole, isPlayer: member.isPlayer };
+}
+
+export async function updateOrgRegionAction(orgId: string, region: string) {
+    await grafbase.request(UpdateOrgRegionMutation, { org_id: orgId, input: { region } });
 }
 
 export async function disbandOrganizationAction(orgId: string) {

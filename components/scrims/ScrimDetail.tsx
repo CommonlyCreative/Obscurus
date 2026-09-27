@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition, useState } from "react";
+import { X } from "lucide-react";
 import { ArrayElement, cn, formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
 import { MatchLog } from "@/components/scrims/MatchLog";
@@ -26,6 +27,7 @@ import {
 import { InvitationType } from "@/app/api/graphql/server";
 import { getRankImage } from "@/lib/rankImage";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { SubstitutePicker, type SubstituteCandidate } from "./SubstitutePicker";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +51,7 @@ export interface ScrimDetailProps {
     isHostOrgManager: boolean;
     hostOrgId: string | null;
     viewerOrgId: string | null;
+    allUsers: SubstituteCandidate[];
 }
 
 // ─── Status metadata ──────────────────────────────────────────────────────────
@@ -123,6 +126,7 @@ export function ScrimDetail({
     isOpponentOrgManager,
     isHostOrgManager,
     viewerOrgId: _viewerOrgId,
+    allUsers,
 }: ScrimDetailProps) {
     const router = useRouter();
     const [pending, startTransition] = useTransition();
@@ -146,6 +150,10 @@ export function ScrimDetail({
         () => new Set((myOrg?.coreTeam ?? []).slice(0, 6).map(m => m._id))
     );
     const [manualCaptainId, setManualCaptainId] = useState<string | null>(null);
+    // Outside picks (free agents / players from other orgs) added straight into the
+    // roster — kept separately from `selectedTeamIds` only so their names are available
+    // to render, since they don't appear in `activeOrgMembers`.
+    const [externalPicks, setExternalPicks] = useState<SubstituteCandidate[]>([]);
 
     function toggleTeamMember(memberId: string) {
         setSelectedTeamIds(prev => {
@@ -159,6 +167,21 @@ export function ScrimDetail({
         });
     }
 
+    function addSubstitute(candidate: SubstituteCandidate) {
+        if (selectedTeamIds.size >= 6) return;
+        setSelectedTeamIds(prev => new Set(prev).add(candidate._id));
+        setExternalPicks(prev => [...prev, candidate]);
+    }
+
+    function removeSubstitute(id: string) {
+        setSelectedTeamIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
+        setExternalPicks(prev => prev.filter(p => p._id !== id));
+    }
+
     const [live, setLive] = useState({
         status: scrim.status,
         result: scrim.result ?? null as ScrimmageResult | null,
@@ -167,6 +190,7 @@ export function ScrimDetail({
         partyCode: scrim.partyCode ?? null as string | null,
         matches: scrim.matches,
     });
+    const [lastDraftEvent, setLastDraftEvent] = useState<unknown>(null);
 
     // `scrim` is a new object every server render. Socket patches only cover a subset of
     // fields (status/ready/matches/partyCode) — rosters, org info, and invitations are read
@@ -188,8 +212,6 @@ export function ScrimDetail({
         setInviteStatus(myInvitation?.status ?? null);
     }
 
-    console.log("Test", scrim)
-
     function applyPatch(update: Partial<typeof live>) {
         setLive(prev => ({ ...prev, ...update }));
     }
@@ -209,6 +231,8 @@ export function ScrimDetail({
                 result: (m.result as string | null) ?? null,
                 startedAt: m.startedAt,
                 concludedAt: m.concludedAt ?? null,
+                draftLink: m.draftLink ?? null,
+                draftData: m.draftData ?? null,
             })),
         });
     }
@@ -224,6 +248,7 @@ export function ScrimDetail({
             matches: socketPatch.matches as NonNullable<GetScrimmageDetailQuery["getScrimmage"]>["matches"],
         }),
         () => router.refresh(),
+        (event) => setLastDraftEvent(event),
     );
 
     function refresh(fn: () => Promise<unknown>) {
@@ -256,8 +281,10 @@ export function ScrimDetail({
 
     const showReadyCheck = !isFinished && userId && showReadyState;
     const showJoin = status === ScrimmageStatus.Open && userId && !isHost && !isHostMember;
+    const canViewMatch = isHostMember || isOpponentMember || isHostLeader || isOpponentLeader || isOpponentOrgManager || isHostOrgManager;
+    const canManageDraft = isHostLeader || isOpponentLeader || isHostOrgManager || isOpponentOrgManager;
     const showInvitation = myInvitation && !isFinished && !isActive && myInvitation.status === InvitationStatus.Pending;
-    const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!userId; //TODO;
+    const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!userId && myInvitation.status === InvitationStatus.Pending; //TODO;
     const isOrgChallenge = !!myInvitation && !!myInvitation.organization;
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
     const roster = isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
@@ -272,10 +299,16 @@ export function ScrimDetail({
         ? manualCaptainId
         : (userId && captainCandidates.some(c => c.id === userId) ? userId : null);
 
+    // Substitutes — org challenges only. Free agents or players from other orgs the
+    // accepting org can add straight into an open roster slot; own-org members are
+    // picked from the roster grid above instead.
+    const substituteCandidates = allUsers.filter(u => !roster.includes(u._id) && u.organization?._id !== myOrg?._id && !scrim.hostTeam.members.some(m => m._id === u._id));
+    const activeExternalPicks = externalPicks.filter(p => roster.includes(p._id));
+
     const rankAverageMMR = getRankAverages();
     const rankAverage = getRankByMMR(rankAverageMMR)
     const hostName = scrim.hostOrg?.name ?? scrim.hostTeam.name ?? "";
-    const opponenetName = scrim.opponentOrg?.name ?? scrim.opponentTeam?.name;
+    const opponentName = scrim.opponentOrg?.name ?? scrim.opponentTeam?.name;
 
     const completedMatches = live.matches.filter((m) => m.result);
     const hostMatchWins = completedMatches.filter((m) => m.result === MatchResult.HostWin).length;
@@ -315,15 +348,24 @@ export function ScrimDetail({
         setError(null);
         startTransition(async () => {
             try {
-                const data = await (isReady
-                    ? unreadyAction(scrim._id, side)
-                    : readyUpAction(scrim._id, side));
-                if (data) {
-                    applyAndBroadcast({
-                        status: data.status as ScrimmageStatus,
-                        readyHost: data.readyHost,
-                        readyOpponent: data.readyOpponent,
-                    });
+                if (isReady) {
+                    const data = await unreadyAction(scrim._id, side);
+                    if (data) {
+                        applyAndBroadcast({
+                            status: data.status as ScrimmageStatus,
+                            readyHost: data.readyHost,
+                            readyOpponent: data.readyOpponent,
+                        });
+                    }
+                } else {
+                    const data = await readyUpAction(scrim._id, side);
+                    if (data) {
+                        applyAndBroadcast({
+                            status: data.status as ScrimmageStatus,
+                            readyHost: data.readyHost,
+                            readyOpponent: data.readyOpponent,
+                        });
+                    }
                 }
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Action failed");
@@ -514,7 +556,7 @@ export function ScrimDetail({
                                 {scrim.opponentOrg && <span className="text-[12px] font-mono text-secondary bg-secondary/10 border border-secondary/20 px-1.5 py-0.5 rounded shrink-0">
                                     ORG
                                 </span>}
-                                <span className="truncate">{opponenetName ?? <p className="italic text-muted">TBD</p>}</span>
+                                <span className="truncate">{opponentName ?? <p className="italic text-muted">TBD</p>}</span>
                             </div>
                             {showReadyState && scrim.opponentTeam && (
                                 <div className={cn("text-xs font-semibold mt-2 flex items-center justify-end gap-1.5", readyOpponent ? "text-success" : "text-muted")}>
@@ -778,19 +820,35 @@ export function ScrimDetail({
                     )}
                 </div>
             </div>
-
             {/* ── Match Log (full-width below grid) ── */}
             {(isActive || isCompleted) && (
-                <div className="bg-surface border border-edge rounded-lg p-4">
+                <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
                     <MatchLog
                         scrimmageId={scrim._id}
-                        canViewParyCode={!isCompleted && (isHostMember || isOpponentMember || isHostLeader || isOpponentLeader || isOpponentOrgManager || isHostOrgManager)}
+                        canViewPartyCode={!isCompleted && canViewMatch}
                         matches={live.matches}
                         partyCode={live.partyCode}
                         isHostLeader={isHostLeader}
+                        isOpponentLeader={isOpponentLeader}
+                        hostName={hostName}
+                        opponentName={opponentName ?? "Opponent"}
                         isActive={isActive}
                         onPatch={handleMatchLogPatch}
                     />
+
+                    {/* Debug: raw Statlocker webhook payloads, visible only to whoever's
+                        actually running the match, so we can see what Statlocker sends
+                        without digging through server logs while its event shapes are
+                        still unknown. Draft results normally come from the manual upload
+                        in the match draft section above instead. */}
+                    {canManageDraft && lastDraftEvent != null && (
+                        <details className="text-xs text-muted">
+                            <summary className="cursor-pointer hover:text-dimmed transition-colors">Last Draft Event (debug)</summary>
+                            <pre className="mt-2 p-2 bg-surface-2 border border-edge rounded overflow-x-auto text-[11px] text-dimmed whitespace-pre-wrap break-all">
+                                {JSON.stringify(lastDraftEvent, null, 2)}
+                            </pre>
+                        </details>
+                    )}
                 </div>
             )}
 
@@ -808,36 +866,71 @@ export function ScrimDetail({
                     </div>
 
                     {isOrgChallenge ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            {activeOrgMembers.length === 0 ? (
-                                <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
-                            ) : activeOrgMembers.map(member => {
-                                const inTeam = selectedTeamIds.has(member.user._id);
-                                const disabled = !inTeam && selectedTeamIds.size >= 6;
-                                const stats = getRankByMMR(member.user.stats?.mmr ?? 0)
-                                return (
-                                    <button
-                                        key={member.user._id}
-                                        type="button"
-                                        onClick={() => toggleTeamMember(member.user._id)}
-                                        disabled={disabled}
-                                        className={cn(
-                                            "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
-                                            inTeam
-                                                ? "border-primary/40 bg-primary/5 text-foreground"
-                                                : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                                        )}
-                                    >
-                                        <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
-                                            {member.user.name.charAt(0)}
-                                        </div>
-                                        <span className="font-medium flex-1 text-xs truncate">{member.user.name}</span>
-                                        {stats && (
-                                            <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
-                                        )}
-                                    </button>
-                                );
-                            })}
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                {activeOrgMembers.length === 0 ? (
+                                    <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
+                                ) : activeOrgMembers.map(member => {
+                                    const inTeam = selectedTeamIds.has(member.user._id);
+                                    const disabled = !inTeam && selectedTeamIds.size >= 6;
+                                    const stats = getRankByMMR(member.user.stats?.mmr ?? 0)
+                                    return (
+                                        <button
+                                            key={member.user._id}
+                                            type="button"
+                                            onClick={() => toggleTeamMember(member.user._id)}
+                                            disabled={disabled}
+                                            className={cn(
+                                                "flex items-center gap-2.5 px-3 py-2.5 rounded border text-left transition-colors",
+                                                inTeam
+                                                    ? "border-primary/40 bg-primary/5 text-foreground"
+                                                    : "border-edge text-dimmed hover:text-foreground hover:border-foreground/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                                            )}
+                                        >
+                                            <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[9px] font-bold text-foreground shrink-0">
+                                                {member.user.name.charAt(0)}
+                                            </div>
+                                            <span className="font-medium flex-1 text-xs truncate">{member.user.name}</span>
+                                            {stats && (
+                                                <span className="text-[10px] text-muted shrink-0">{`${stats.rank.name} ${stats.division}`}</span>
+                                            )}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {activeExternalPicks.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                    {activeExternalPicks.map(p => (
+                                        <span
+                                            key={p._id}
+                                            className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-primary/40 bg-primary/5 text-xs text-foreground"
+                                        >
+                                            {p.name}
+                                            <span className="text-[9px] font-bold text-primary uppercase tracking-wider">Sub</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => removeSubstitute(p._id)}
+                                                className="text-muted hover:text-danger transition-colors"
+                                            >
+                                                <X className="size-3" />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div>
+                                <p className="text-xs font-semibold text-foreground mb-1.5">Add a substitute</p>
+                                <p className="text-[11px] text-dimmed mb-1.5">
+                                    Fill an open slot with a free agent or a player from another team.
+                                </p>
+                                <SubstitutePicker
+                                    candidates={substituteCandidates}
+                                    disabled={selectedTeamIds.size >= 6}
+                                    onAdd={addSubstitute}
+                                />
+                            </div>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -901,6 +994,7 @@ export function ScrimDetail({
                             </div>
                         </div>
                     )}
+
 
                     <div className="flex items-center gap-3">
                         <Button

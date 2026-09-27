@@ -17,6 +17,20 @@ const GetViewerOrgQuery = graphql(`
     }
 `);
 
+const GetScrimUsersQuery = graphql(`
+    query GetScrimUsers {
+        getUsers {
+            _id
+            name
+            verified
+            organization {
+                _id
+                name
+            }
+        }
+    }
+`);
+
 const GetScrimmageQuery = graphql(`
     query GetScrimmageDetail($scrimmage_id: String!) {
         getScrimmage(scrimmage_id: $scrimmage_id) {
@@ -39,12 +53,14 @@ const GetScrimmageQuery = graphql(`
                 result
                 startedAt
                 concludedAt
+                draftLink
+                draftData
             }
             host { _id name stats { mmr } }
             hostOrg { _id name members { orgRole status user { _id } } }
             hostTeam {
                 name
-                leader { _id name stats { mmr } }
+                leader { _id name stats { mmr } steam { id } }
                 members { _id name stats { mmr } }
             }
             opponentOrg {
@@ -63,7 +79,7 @@ const GetScrimmageQuery = graphql(`
             }
             opponentTeam {
                 name
-                leader { _id name stats { mmr } }
+                leader { _id name stats { mmr } steam { id } }
                 members { _id name stats { mmr } }
             }
             invitations {
@@ -110,12 +126,19 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     const session = await auth.api.getSession({ headers: await headers() });
     const user = session?.user as User | undefined;
 
-    const [{ getScrimmage: scrim }, viewerData] = await Promise.all([
+    const [{ getScrimmage: scrim }, viewerData, { getUsers: allUsers }] = await Promise.all([
         grafbase.request(GetScrimmageQuery, { scrimmage_id: id }),
         user ? grafbase.request(GetViewerOrgQuery, { user_id: user.id }) : Promise.resolve(null),
+        grafbase.request(GetScrimUsersQuery),
     ]);
 
     if (!scrim) notFound();
+
+    // Substitute candidates: any verified, real player — free agents or players from
+    // other teams. Roster exclusions are applied client-side in ScrimDetail.
+    const substituteCandidates = (allUsers ?? [])
+        .filter((u) => u.verified)
+        .map((u) => ({ _id: u._id, name: u.name, organization: u.organization ?? null }));
 
     const viewerOrgId = viewerData?.getUser?.organization?._id ?? null;
     const isHost = user?.id === scrim.host._id;
@@ -146,6 +169,7 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
             isOpponentOrgManager={isOpponentOrgManager}
             isHostOrgManager={isHostOrgManager}
             viewerOrgId={viewerOrgId}
+            allUsers={substituteCandidates}
         />
     );
 }

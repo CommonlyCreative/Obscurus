@@ -41,6 +41,21 @@ export interface StatlockerBatchProfile {
     estimatedRankNumber: number;
 }
 
+// One ban/pick action from a Statlocker public draft export (see
+// lib/types/deadlock/example-draft-export.json for a real sample). "team1"/"team2" match
+// whichever teams were passed as team1/team2 when the draft was created — host is always
+// team1, opponent is always team2 (see ensureStatlockerDraft in app/api/graphql/resolvers.ts).
+export interface StatlockerDraftAction {
+    id: number;
+    team: "team1" | "team2";
+    type: "ban" | "pick";
+    heroId: number;
+    hero: string;
+    wasRandom: boolean;
+}
+
+export type StatlockerDraftExport = StatlockerDraftAction[];
+
 export interface StatlockerProfile {
     accountId: number;
     winRate: number;

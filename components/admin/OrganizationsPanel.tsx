@@ -13,6 +13,7 @@ import {
     adminAddPlaceholderMemberAction,
     adminSetCoreTeamAction,
     adminUpdateAvailabilityBlocksAction,
+    adminMergeOrganizationsAction,
 } from "@/app/admin/actions";
 import {
     Dialog,
@@ -279,12 +280,105 @@ function CoreTeamEditor({
     );
 }
 
+function MergeArtificialOrgForm({
+    org,
+    realOrgs,
+    onChanged,
+}: {
+    org: AdminOrgRow;
+    realOrgs: AdminOrgRow[];
+    onChanged: () => void;
+}) {
+    const [targetId, setTargetId] = useState("");
+    const [pending, start] = useTransition();
+    const [error, setError] = useState<string | null>(null);
+
+    const target = realOrgs.find((o) => o._id === targetId) ?? null;
+
+    function merge() {
+        if (!target) return;
+        setError(null);
+        start(async () => {
+            try {
+                await adminMergeOrganizationsAction(target._id, org._id);
+                onChanged();
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to merge organizations.");
+            }
+        });
+    }
+
+    return (
+        <div className="space-y-2">
+            <p className="text-xs text-muted">
+                Moves every scrimmage {org.name} hosted or played in over to the real organization you pick
+                below. {org.name}&apos;s own record and roster — including any unclaimed placeholder players —
+                are left exactly as they are; merge those players into their real profiles separately from the
+                Users tab, whenever you identify who they are.
+            </p>
+            {realOrgs.length === 0 ? (
+                <p className="text-xs text-muted italic">No other real organizations to merge into.</p>
+            ) : (
+                <select
+                    value={targetId}
+                    onChange={(e) => setTargetId(e.target.value)}
+                    className="w-full bg-surface-2 border border-edge rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
+                >
+                    <option value="">Select the real organization…</option>
+                    {realOrgs.map((o) => (
+                        <option key={o._id} value={o._id}>{o.name} [{o.slug}]</option>
+                    ))}
+                </select>
+            )}
+            {error && <p className="text-xs text-danger">{error}</p>}
+            {target && (
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <button
+                            type="button"
+                            disabled={pending}
+                            className="px-4 py-2 text-sm font-semibold rounded border border-secondary/40 text-secondary bg-secondary/5 hover:bg-secondary/15 hover:border-secondary/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {pending ? "Merging…" : `Merge into ${target.name}`}
+                        </button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md" showCloseButton={false}>
+                        <DialogHeader>
+                            <DialogTitle>Merge {org.name} into {target.name}?</DialogTitle>
+                            <DialogDescription>
+                                Every scrimmage {org.name} hosted or played in will be repointed to {target.name}.
+                                {org.name}&apos;s own roster and record are kept as-is — nothing is deleted.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="sm:justify-start">
+                            <DialogClose asChild>
+                                <button
+                                    type="button"
+                                    onClick={merge}
+                                    className="px-4 py-2 text-sm font-semibold rounded border border-secondary/40 text-secondary bg-secondary/5 hover:bg-secondary/15 hover:border-secondary/60 transition-colors"
+                                >
+                                    Yes, merge
+                                </button>
+                            </DialogClose>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary" className="px-6">Cancel</Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+        </div>
+    );
+}
+
 function OrgDetail({
     org,
+    allOrgs,
     canManage,
     onChanged,
 }: {
     org: AdminOrgRow;
+    allOrgs: AdminOrgRow[];
     canManage: boolean;
     onChanged: () => void;
 }) {
@@ -428,6 +522,18 @@ function OrgDetail({
                 )}
             </div>
 
+            {/* Merge into real org — admin only, artificial orgs only */}
+            {org.artificial && canManage && (
+                <div className="border-t border-edge pt-4">
+                    <p className="text-[10px] text-muted uppercase tracking-widest mb-2">Merge Into Real Organization</p>
+                    <MergeArtificialOrgForm
+                        org={org}
+                        realOrgs={allOrgs.filter((o) => !o.artificial && o._id !== org._id)}
+                        onChanged={onChanged}
+                    />
+                </div>
+            )}
+
             {/* Add player — admin only */}
             {canManage && (
                 <div className="border-t border-edge pt-4">
@@ -570,6 +676,7 @@ export function OrganizationsPanel({
                     <OrgDetail
                         key={selected._id}
                         org={selected}
+                        allOrgs={organizations}
                         canManage={canManage}
                         onChanged={() => router.refresh()}
                     />

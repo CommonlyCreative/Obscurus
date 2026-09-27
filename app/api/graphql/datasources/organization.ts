@@ -105,6 +105,7 @@ export class OrganizationDataSource {
             blocks: [],
             artificial: input.artificial ?? false,
             disbanded: false,
+            region: "NA",
             createdAt: Date.now(),
             updatedAt: Date.now(),
         };

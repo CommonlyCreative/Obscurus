@@ -9,16 +9,19 @@ import {
     getUserDetailAction,
     getUserFeedbackAction,
     getUserScrimsAction,
+    getUsersAction,
     changeUserRoleAction,
     updateUserDataAction,
     banUserAction,
     unbanUserAction,
+    mergeUsersAction,
     adminCancelScrimmageAction,
     sendNotificationAdminAction,
     UserDetail,
     UserFeedbackItem,
     UserScrimItem,
     UserEditableData,
+    UserRow,
 } from "@/app/admin/actions";
 import { socket } from "@/lib/socket/socket-client";
 
@@ -452,6 +455,162 @@ function BanCard({ user, onDone }: { user: UserDetail; onDone: () => void }) {
     );
 }
 
+// ─── Merge duplicate account ──────────────────────────────────────────────────
+
+function MergeUserForm({ user, onMerged }: { user: UserDetail; onMerged: (survivingUserId: string) => void }) {
+    const [query, setQuery] = useState("");
+    const [results, setResults] = useState<UserRow[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [target, setTarget] = useState<UserRow | null>(null);
+    const [direction, setDirection] = useState<"currentIsReal" | "currentIsFake">("currentIsReal");
+    const [confirming, setConfirming] = useState(false);
+    const [pending, start] = useTransition();
+    const [error, setError] = useState<string | null>(null);
+
+    async function search(q: string) {
+        setQuery(q);
+        setTarget(null);
+        if (!q.trim()) {
+            setResults([]);
+            return;
+        }
+        setSearching(true);
+        try {
+            const rows = await getUsersAction(q.trim());
+            setResults(rows.filter((r) => r._id !== user._id));
+        } finally {
+            setSearching(false);
+        }
+    }
+
+    function pick(row: UserRow) {
+        setTarget(row);
+        setResults([]);
+        setQuery(row.name);
+    }
+
+    function merge() {
+        if (!target) return;
+        setError(null);
+        start(async () => {
+            try {
+                const realId = direction === "currentIsReal" ? user._id : target._id;
+                const fakeId = direction === "currentIsReal" ? target._id : user._id;
+                await mergeUsersAction(realId, fakeId);
+                onMerged(realId);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to merge users.");
+                setConfirming(false);
+            }
+        });
+    }
+
+    const inp = "w-full bg-surface border border-edge rounded px-2 py-1.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary/50 transition-colors";
+
+    return (
+        <div className="space-y-3">
+            <p className="text-[10px] text-muted leading-relaxed">
+                The surviving profile keeps its own name, email, steam link and heroes wherever it already
+                has one set (otherwise it takes the other side's); scrim history from both is combined,
+                and every scrimmage referencing the removed account is repointed to the surviving one.
+                The other account is deleted.
+            </p>
+
+            <div>
+                <label className="block text-[10px] text-muted uppercase tracking-wide mb-1">
+                    Find duplicate account
+                </label>
+                <input
+                    value={query}
+                    onChange={(e) => search(e.target.value)}
+                    placeholder="Search by name or email..."
+                    className={inp}
+                />
+            </div>
+
+            {searching && <p className="text-xs text-muted">Searching...</p>}
+
+            {!target && results.length > 0 && (
+                <div className="max-h-40 overflow-y-auto border border-edge rounded-md divide-y divide-edge">
+                    {results.map((r) => (
+                        <button
+                            key={r._id}
+                            onClick={() => pick(r)}
+                            className="w-full text-left px-2.5 py-1.5 text-xs text-foreground hover:bg-surface-2 transition-colors"
+                        >
+                            {r.name} <span className="text-muted">{r.email}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+
+            {target && (
+                <div className="space-y-2.5 bg-surface-2 rounded-md p-3">
+                    <p className="text-xs text-foreground">
+                        Merging with <span className="font-semibold">{target.name}</span>
+                        <button
+                            onClick={() => { setTarget(null); setQuery(""); }}
+                            className="ml-2 text-[10px] text-muted hover:text-foreground underline"
+                        >
+                            change
+                        </button>
+                    </p>
+
+                    <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 text-xs text-dimmed cursor-pointer">
+                            <input
+                                type="radio"
+                                checked={direction === "currentIsReal"}
+                                onChange={() => setDirection("currentIsReal")}
+                                className="accent-primary"
+                            />
+                            Keep <span className="text-foreground font-medium">{user.name}</span> (this profile), delete {target.name}
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-dimmed cursor-pointer">
+                            <input
+                                type="radio"
+                                checked={direction === "currentIsFake"}
+                                onChange={() => setDirection("currentIsFake")}
+                                className="accent-primary"
+                            />
+                            Keep <span className="text-foreground font-medium">{target.name}</span>, delete this profile ({user.name})
+                        </label>
+                    </div>
+
+                    {error && (
+                        <p className="text-xs text-danger bg-danger/10 border border-danger/20 rounded px-3 py-2">{error}</p>
+                    )}
+
+                    {confirming ? (
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                disabled={pending}
+                                onClick={merge}
+                                className="flex-1 bg-danger text-foreground hover:opacity-80"
+                            >
+                                {pending ? "Merging..." : "Confirm Merge"}
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    ) : (
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setConfirming(true)}
+                            className="w-full text-danger border-danger/20 hover:border-danger/40"
+                        >
+                            Merge Accounts
+                        </Button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
 // ─── Scrim cancel inline ─────────────────────────────────────────────────────
 
 function ScrimCancelButton({ scrimId, onDone }: { scrimId: string; onDone: () => void }) {
@@ -505,7 +664,15 @@ function ScrimCancelButton({ scrimId, onDone }: { scrimId: string; onDone: () =>
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function UserDetailPanel({ userId, adminRole }: { userId: string; adminRole: string }) {
+export function UserDetailPanel({
+    userId,
+    adminRole,
+    onMerged,
+}: {
+    userId: string;
+    adminRole: string;
+    onMerged: (survivingUserId: string) => void;
+}) {
     const router = useRouter();
     const isAdmin = adminRole === "ADMIN";
 
@@ -644,6 +811,10 @@ export function UserDetailPanel({ userId, adminRole }: { userId: string; adminRo
                         <div>
                             <p className="text-xs text-dimmed mb-1.5 font-medium">Notification</p>
                             <SendNotificationForm userId={detail._id} />
+                        </div>
+                        <div>
+                            <p className="text-xs text-dimmed mb-1.5 font-medium">Merge Duplicate Account</p>
+                            <MergeUserForm user={detail} onMerged={onMerged} />
                         </div>
                     </div>
                 </Section>

@@ -16,6 +16,7 @@ const OrgManagePageQuery = graphql(`
       _id
       name
       slug
+      region
       owner { _id }
       members {
         user { _id name }
@@ -105,6 +106,7 @@ async function OrgManageContent({ params }: { params: Promise<{ slug: string }> 
                     name: org.name,
                     slug: org.slug,
                     ownerId: org.owner._id,
+                    region: org.region,
                     members: activeMembers,
                     coreTeamIds,
                 }}

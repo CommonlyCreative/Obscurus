@@ -27,6 +27,7 @@ export interface UpdateProfilePayload {
     userId: string;
     heroes: number[];
     bio: string;
+    region: string;
 }
 
 export async function updateProfileAction(payload: UpdateProfilePayload) {
@@ -35,6 +36,7 @@ export async function updateProfileAction(payload: UpdateProfilePayload) {
         input: {
             heroes: payload.heroes,
             bio: payload.bio,
+            region: payload.region,
         },
     });
 }

@@ -6,6 +6,8 @@ export type Hero = {
     name: string,
 }
 
+export const REGIONS = ["NA", "EU", "ASIA", "SA"] as const;
+
 export const Hero = {
     ABRAMS: CreateHero("", "abrams", "Abrams"),
     APOLLO: CreateHero("", "apollo", "Apollo"),

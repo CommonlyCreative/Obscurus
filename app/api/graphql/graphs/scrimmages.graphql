@@ -38,7 +38,6 @@ type Scrimmage {
     result: ScrimmageResult                  # Overall series result; set when COMPLETED
     bestOf: BestOf!
     region: String!
-    draftLink: String
     isPrivate: Boolean!                      # true = directed at targetOrg only
     scheduledAt: Timestamp                   # Unix ms; null = ASAP
     wagerAmount: Int!                        # Credits each leader puts up (0 = no wager)
@@ -58,6 +57,8 @@ type Match {
     result: MatchResult      # Null while the game is in progress
     startedAt: Timestamp!          # Unix ms when the host called startMatch
     concludedAt: Timestamp         # Unix ms when the host submitted the result
+    draftLink: String              # Statlocker draft lobby for this specific match
+    draftData: String              # Raw JSON draft export (picks/bans) uploaded by a leader — see uploadMatchDraft
 }
 
 enum BestOf {
@@ -193,6 +194,7 @@ input CreateArtificialScrimmageInput {
 input CreateScrimmageInput {
     hostOrg_id: String
     team: [String!]!             # Host roster: exactly 6 user IDs
+    teamName: String
     note: String
     host_id: String!
     leader_id: String            # Captain who runs the match — defaults to host_id if omitted; need not be on the roster
@@ -302,6 +304,18 @@ extend type Mutation {
 
     # Party code — host sets this; required before startMatch can be called
     setPartyCode(scrimmage_id: String!, partyCode: String!): Scrimmage
+
+    # Creates (or, if one already exists, just returns) the Statlocker draft lobby for a
+    # specific match — each match in the series gets its own draft. startMatch already
+    # triggers this automatically for the match it creates; this is a manual retry for
+    # when that automatic attempt failed (e.g. Statlocker was briefly unreachable).
+    # Idempotent per match: never creates a second draft for the same match.
+    createMatchDraft(scrimmage_id: String!, match_number: Int!): Scrimmage
+
+    # Statlocker doesn't reliably call back with draft results, so a leader manually
+    # uploads that match's draft JSON export instead. Stored as-is for the record;
+    # overwrites any previous upload for that match.
+    uploadMatchDraft(scrimmage_id: String!, match_number: Int!, draftData: String!): Scrimmage
 
     # Match lifecycle — host only
     startMatch(scrimmage_id: String!): Scrimmage

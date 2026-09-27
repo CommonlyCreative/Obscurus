@@ -43,13 +43,17 @@ export class UserDataSource {
     // verified: false) so that Better Auth's implicit account linking on the
     // Discord OAuth callback adopts this exact document once the real player signs in
     // with a matching, verified email — see oauth2/link-account.mjs in better-auth.
-    async createManualUser(input: { name: string; email: string }) {
+    // When no email is given, a fake placeholder address is generated instead (see
+    // placeholderEmail below) — it can never match a real Discord account, so the
+    // profile stays unclaimable until a manager edits in the player's real email.
+    async createManualUser(input: { name: string; email?: string | null }) {
         const now = Date.now();
+        const _id = new ObjectId();
         const user: DBUser = {
             ...DEFAULTS,
-            _id: new ObjectId(),
+            _id,
             name: input.name,
-            email: input.email.toLowerCase(),
+            email: input.email?.trim() ? input.email.trim().toLowerCase() : placeholderEmail(_id),
             createdAt: now,
             updatedAt: now,
         };
@@ -105,6 +109,32 @@ export class UserDataSource {
         return user.modifiedCount > 0;
     }
 
+    // Folds `fake` into `real`: real's name/email/steam/heroes win whenever it has a
+    // value, scrimmage histories are concatenated (deduped), and organization is
+    // filled from whichever side has one, with real winning if both do. Callers are
+    // responsible for repointing any scrimmage documents that reference `fake`'s _id
+    // before/after this runs (see ScrimmageDataSource.reassignUser) — this only
+    // touches the two user documents. `fake` is deleted once the merge completes.
+    async mergeUsers(real: WithId<DBUser>, fake: WithId<DBUser>): Promise<DBUser> {
+        const scrimmages = [...new Set([...real.scrimmages, ...fake.scrimmages])];
+        const organization = real.organization || fake.organization || "";
+
+        const merged: Partial<DBUser> & { email?: string } = {
+            name: real.name || fake.name,
+            heroes: real.heroes?.length ? real.heroes : fake.heroes,
+            steam: real.steam ?? fake.steam,
+            scrimmages,
+            organization,
+            updatedAt: Date.now(),
+        };
+        if (!real.email && fake.email) merged.email = fake.email;
+
+        await this.collection.updateOne({ _id: new ObjectId(real._id) }, { $set: merged });
+        await this.collection.deleteOne({ _id: new ObjectId(fake._id) });
+
+        return { ...real, ...merged };
+    }
+
     // A "ghost" is a manager-created placeholder that no one ever claimed
     // (verified stays false until a real Discord sign-in matches its email —
     // see createManualUser) and that never actually played in a scrimmage.
@@ -119,6 +149,13 @@ export class UserDataSource {
         await this.collection.deleteOne({ _id: new ObjectId(_id) });
         return true;
     }
+}
+
+// A domain no real Discord account can ever use, so this address can never be matched
+// by Better Auth's implicit account-linking — the profile stays a manager-only
+// placeholder until someone edits in a real email.
+function placeholderEmail(id: ObjectId): string {
+    return `placeholder-${id.toHexString()}@obscurus.invalid`;
 }
 
 // User IS the Better Auth user document — queried from the "user" collection.

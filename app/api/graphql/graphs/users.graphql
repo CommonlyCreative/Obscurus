@@ -35,7 +35,7 @@ type Rank {
 }
 
 type Steam {
-    id: String!
+    id: String! # Steam64
     username: String!
     avatar: String!
 }
@@ -81,6 +81,7 @@ input UpdateUserInput {
     mmr: Int
     heroes: [Int!]
     bio: String
+    region: String
     balance: BalanceInput
     steam: SteamInput
 }
@@ -118,4 +119,12 @@ extend type Mutation {
     # Reuses CreatePlaceholderPlayerInput (see organization.graphql) since it's the
     # same shape/claiming semantics as a manager-created placeholder player.
     createPlaceholderUser(input: CreatePlaceholderPlayerInput!): User
+
+    # Admin-only: merges a duplicate "fake" account into the "real" one. The real
+    # user's name/email/steam/heroes win when both sides have a value; scrimmage
+    # histories are concatenated; organization is filled from whichever side has
+    # one, with the real user's winning if both do. Every scrimmage referencing
+    # fake_user_id is repointed to real_user_id, and the fake user document is
+    # deleted once the merge completes.
+    mergeUsers(real_user_id: String!, fake_user_id: String!): User
 }

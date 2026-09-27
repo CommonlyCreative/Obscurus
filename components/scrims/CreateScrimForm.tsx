@@ -5,15 +5,16 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { RosterSelector } from "./RosterSelector";
 import { LiveTeamPicker } from "./LiveTeamPicker";
+import { SubstitutePicker, type SubstituteCandidate } from "./SubstitutePicker";
 import { findTeam, useTeamSocket } from "@/hooks/useTeamSocket";
 import { checkGoogleAvailability, createGoogleScrimmageEvent, createScrimmageAction, getOrganization, insertCalendarInfo } from "@/app/scrims/create/actions";
 import { BestOf, CreateScrimPageQuery, MatchSide, ScrimmageInvitationInput } from "@/app/api/graphql/types/graphql";
 import { cn } from "@/lib/utils";
-import type { OrgMember, Region } from "./types";
+import type { OrgMember, RosterPick } from "./types";
 import { useLiveTeams } from "@/hooks/useLiveTeams";
 import { OrgAvailabilityCalendar } from "./OrgAvailabilityCalendar";
 import { UserCalendarView } from "./UserCalendarView";
-import { convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
+import { convertSteam64toSteam32, getRankByMMR, REGIONS } from "@/lib/deadlock";
 import { socket } from "@/lib/socket/socket-client";
 import { notifyScrimmageInvitation } from "@/app/profile/[id]/actions";
 import { toast } from "sonner";
@@ -24,6 +25,8 @@ const BEST_OF_OPTIONS: { value: BestOf; label: string; sub: string }[] = [
     { value: BestOf.Five, label: "Bo5", sub: "First to 3 wins" },
     { value: BestOf.Unlimited, label: "Open", sub: "No series limit" },
 ];
+
+
 
 export interface OrgProp {
     _id: string;
@@ -37,6 +40,7 @@ interface Props {
     org: OrgProp | null;
     isManager: boolean;
     orgs: CreateScrimPageQuery["getOrganizations"]
+    allUsers: SubstituteCandidate[];
 }
 
 function SectionCard({ title, subtitle, children }: {
@@ -64,7 +68,7 @@ export const ENDTIME_CONVERSION = {
 
 export type ScrimmageTarget = { user_id: string, org: { id: string, name: string } | null };
 
-export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbanded }: Props) {
+export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbanded, allUsers }: Props) {
     // Disbanded orgs are kept on record (soft-disbanded), not deleted — never offer one
     // as an opponent to schedule against or an availability calendar to check.
     const orgs = orgsWithDisbanded?.filter((o) => !o.disbanded) ?? null;
@@ -79,7 +83,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
     const [note, setNote] = useState("");
 
     // Region
-    const [region, setRegion] = useState<Region>("NA");
+    const [region, setRegion] = useState<typeof REGIONS[number]>("NA");
 
     // Best of
     const [bestOf, setBestOf] = useState<BestOf>(BestOf.One);
@@ -93,12 +97,13 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
     const [scheduled, setScheduled] = useState(false);
     const [scheduledDate, setScheduledDate] = useState("");
 
-    // Roster (org manager only): starts from coreTeam, padded to 6 slots
-    const initialRoster: (OrgMember | undefined)[] = [
-        ...(org?.coreTeam.slice(0, 6) ?? []),
+    // Roster (org manager only): starts from coreTeam, padded to 6 slots. Slots can be
+    // filled either from the org's own roster or with an outside pick (see Substitutes).
+    const initialRoster: (RosterPick | undefined)[] = [
+        ...(org?.coreTeam.slice(0, 6) ?? []).map((m): RosterPick => ({ _id: m.user._id, name: m.user.name, stats: m.user.stats })),
         ...Array(Math.max(0, 6 - (org?.coreTeam.length ?? 0))).fill(undefined),
     ];
-    const [roster, setRoster] = useState<(OrgMember | undefined)[]>(initialRoster);
+    const [roster, setRoster] = useState<(RosterPick | undefined)[]>(initialRoster);
 
     // Live team for non-org-roster path
     const { teams: liveTeams } = useTeamSocket([userId]);
@@ -106,7 +111,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
 
     const useOrgRoster = isManager && orgAffiliated;
     const rosterIds = useOrgRoster
-        ? roster.filter(Boolean).map((m) => m!.user._id)
+        ? roster.filter(Boolean).map((m) => m!._id)
         : (liveTeam?.members.map((m) => m.userId) ?? []);
 
     const rosterFull = rosterIds.length === 6;
@@ -120,6 +125,19 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
     const leaderId = manualLeaderId && leaderCandidates.some((c) => c.id === manualLeaderId)
         ? manualLeaderId
         : (leaderCandidates.some((c) => c.id === userId) ? userId : null);
+
+    // Substitutes — org-only. Free agents or players from other orgs the manager can add
+    // straight into an open roster slot; the org's own members are picked via the roster
+    // grid above instead.
+    const substituteCandidates = allUsers.filter((u) => !rosterIds.includes(u._id) && u.organization?._id !== org?._id);
+
+    function addSubstitute(candidate: SubstituteCandidate) {
+        const emptyIdx = roster.findIndex((slot) => !slot);
+        if (emptyIdx === -1) return;
+        const next = [...roster];
+        next[emptyIdx] = { _id: candidate._id, name: candidate.name, external: true };
+        setRoster(next);
+    }
 
     const canSubmit = rosterFull && !!leaderId && (!isPrivate || target !== null) &&
         !(scheduled && !scheduledDate);
@@ -165,6 +183,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
                     note,
                     isPrivate,
                     host_id: userId,
+                    teamName: orgAffiliated && org ? org.name : liveTeam?.name ?? null,
                     leaderId,
                     wagerAmount,
                     hostOrgId: orgAffiliated && org ? org._id : null,
@@ -263,7 +282,7 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
             {/* ── Region ── */}
             <SectionCard title="Region">
                 <div className="flex gap-3">
-                    {(["NA", "EU"] as const).map((r) => (
+                    {REGIONS.map((r) => (
                         <button
                             key={r}
                             type="button"
@@ -349,11 +368,23 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
                                         {roster.filter(Boolean).length} / 6
                                     </span>
                                 </div>
+                                <p className="text-xs text-muted">
+                                    Starts with your core team — deselect anyone and pick a different member, or add
+                                    a free agent or player from another team below as a substitute.
+                                </p>
                                 <RosterSelector
                                     slots={roster}
                                     members={org.members}
                                     onChange={setRoster}
                                 />
+                                <div className="pt-1">
+                                    <p className="text-xs font-semibold text-foreground mb-1.5">Add a substitute</p>
+                                    <SubstitutePicker
+                                        candidates={substituteCandidates}
+                                        disabled={rosterFull}
+                                        onAdd={addSubstitute}
+                                    />
+                                </div>
                             </div>
 
                             {/* Captain */}

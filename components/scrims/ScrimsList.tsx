@@ -1,13 +1,12 @@
 import { ScrimCard } from "./ScrimCard";
 import { Button } from "@/components/shared/Button";
-import type { Scrim, Region } from "./types";
-import { Rank } from "@/lib/deadlock";
+import { Rank, REGIONS } from "@/lib/deadlock";
 import { ScrimListQuery } from "@/app/api/graphql/types/graphql";
 
 interface ScrimsListProps {
     scrims: ScrimListQuery["getScrimmages"] | undefined;
     rankFilter: Rank | "Any";
-    regionFilter: Region | "All";
+    regionFilter: typeof REGIONS[number] | "All";
 }
 
 export function ScrimsList({ scrims, rankFilter, regionFilter }: ScrimsListProps) {

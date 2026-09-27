@@ -2,26 +2,36 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Building2, User, Search } from "lucide-react";
+import { Building2, User, Search, Users, UserCheck, SlidersHorizontal } from "lucide-react";
 import {
     Tooltip,
     TooltipContent,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 import { ArrayElement, cn } from "@/lib/utils";
 import { SearchPageQuery } from "@/app/api/graphql/types/graphql";
 import { getRankImage } from "@/lib/rankImage";
+import { Rank } from "@/lib/deadlock";
 
 export type SearchPlayerData = {
     _id: string;
     name: string;
     role: string;
     online: boolean;
+    region: string;
     heroes: Array<{ id: number; name: string; minimap_image_webp: string }>;
     orgName?: string;
     orgSlug?: string;
     stats: ArrayElement<SearchPageQuery["getUsers"]>["stats"]
 };
+
+const REGIONS = ["All", "NA", "EU", "SA", "ASIA", "OCE"] as const;
+const RANK_TIERS = ["Any", ...Object.values(Rank).map(r => r.name)] as const;
 
 export type SearchOrgData = {
     _id: string;
@@ -46,7 +56,19 @@ export function SearchResults({
     organizations: SearchOrgData[];
 }) {
     const [query, setQuery] = useState("");
+    const [scope, setScope] = useState<"all" | "freeAgents">("all");
+    const [rankFilter, setRankFilter] = useState<string>("Any");
+    const [regionFilter, setRegionFilter] = useState<string>("All");
+    const [filtersOpen, setFiltersOpen] = useState(false);
     const q = query.toLowerCase();
+
+    const freeAgentCount = players.filter(p => !p.orgName).length;
+    const activeFilterCount = (rankFilter !== "Any" ? 1 : 0) + (regionFilter !== "All" ? 1 : 0);
+
+    function clearFilters() {
+        setRankFilter("Any");
+        setRegionFilter("All");
+    }
 
     const filteredOrgs = q
         ? organizations.filter(o =>
@@ -54,18 +76,20 @@ export function SearchResults({
         )
         : organizations;
 
-    const filteredPlayers = q
-        ? players.filter(p =>
-            p.name.toLowerCase().includes(q) || p.orgName?.toLowerCase().includes(q)
-        )
-        : players;
+    const filteredPlayers = players.filter(p => {
+        if (scope === "freeAgents" && p.orgName) return false;
+        if (regionFilter !== "All" && p.region !== regionFilter) return false;
+        if (rankFilter !== "Any" && p.stats?.rank.name !== rankFilter) return false;
+        if (q && !(p.name.toLowerCase().includes(q) || p.orgName?.toLowerCase().includes(q))) return false;
+        return true;
+    });
 
     return (
         <div className="w-full bg-surface border border-edge rounded-lg overflow-hidden">
 
             {/* Search input */}
-            <div className="p-4 border-b border-edge">
-                <div className="relative">
+            <div className="p-4 border-b border-edge flex gap-2">
+                <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted pointer-events-none" />
                     <input
                         type="text"
@@ -75,6 +99,134 @@ export function SearchResults({
                         className="w-full bg-surface-2 border border-edge rounded-md pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/30 transition-colors"
                     />
                 </div>
+
+                {/* Player filters */}
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                    <PopoverTrigger asChild>
+                        <button
+                            type="button"
+                            className={cn(
+                                "relative flex items-center gap-1.5 px-3.5 py-2 rounded-md border text-sm font-semibold transition-colors shrink-0",
+                                activeFilterCount > 0
+                                    ? "border-primary/50 bg-primary/10 text-primary"
+                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20"
+                            )}
+                        >
+                            <SlidersHorizontal className="size-3.5" />
+                            <span className="hidden sm:inline">Filters</span>
+                            {activeFilterCount > 0 && (
+                                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-primary text-background text-[10px] font-bold">
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-80">
+                        <div className="space-y-4">
+                            <div>
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Show</p>
+                                <div className="flex gap-1.5">
+                                    {([
+                                        { value: "all" as const, label: "All Players", icon: Users },
+                                        { value: "freeAgents" as const, label: "Free Agents", icon: UserCheck },
+                                    ]).map(({ value, label, icon: Icon }) => (
+                                        <button
+                                            key={value}
+                                            onClick={() => setScope(value)}
+                                            className={cn(
+                                                "flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors",
+                                                scope === value
+                                                    ? "bg-primary text-background border-primary"
+                                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20",
+                                            )}
+                                        >
+                                            <Icon className="size-3.5" />
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Rank</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {RANK_TIERS.map(r => (
+                                        <button
+                                            key={r}
+                                            onClick={() => setRankFilter(r)}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-semibold rounded-full border transition-colors",
+                                                rankFilter === r
+                                                    ? "bg-primary text-background border-primary"
+                                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20",
+                                            )}
+                                        >
+                                            {r}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Region</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {REGIONS.map(r => (
+                                        <button
+                                            key={r}
+                                            onClick={() => setRegionFilter(r)}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-semibold rounded-full border transition-colors",
+                                                regionFilter === r
+                                                    ? "bg-primary text-background border-primary"
+                                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20",
+                                            )}
+                                        >
+                                            {r}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {activeFilterCount > 0 && (
+                                <button
+                                    onClick={clearFilters}
+                                    className="text-xs text-muted hover:text-foreground transition-colors underline underline-offset-2"
+                                >
+                                    Clear filters
+                                </button>
+                            )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
+            </div>
+
+            {/* Stats overview */}
+            <div className="grid grid-cols-3 divide-x divide-edge border-b border-edge bg-surface-2/50">
+                <div className="px-4 py-3 text-center">
+                    <p className="text-lg font-black text-foreground">{organizations.length}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Organizations</p>
+                </div>
+                <div className="px-4 py-3 text-center">
+                    <p className="text-lg font-black text-foreground">{players.length}</p>
+                    <p className="text-[10px] text-muted uppercase tracking-wider">Players</p>
+                </div>
+                <button
+                    onClick={() => setScope(scope === "freeAgents" ? "all" : "freeAgents")}
+                    className={cn(
+                        "px-4 py-3 text-center transition-colors",
+                        scope === "freeAgents" ? "bg-primary/10" : "hover:bg-surface-2",
+                    )}
+                >
+                    <p className={cn("text-lg font-black", scope === "freeAgents" ? "text-primary" : "text-foreground")}>
+                        {freeAgentCount}
+                    </p>
+                    <p className={cn(
+                        "text-[10px] uppercase tracking-wider",
+                        scope === "freeAgents" ? "text-primary" : "text-muted",
+                    )}>
+                        Free Agents
+                    </p>
+                </button>
             </div>
 
             {/* Organizations */}
@@ -136,15 +288,24 @@ export function SearchResults({
             {/* Players */}
             <div>
                 <div className="px-4 py-2.5 flex items-center gap-2 bg-surface-2 border-b border-edge">
-                    <User className="size-3.5 text-muted" />
-                    <span className="text-xs font-semibold text-muted uppercase tracking-wider">
-                        Players
+                    {scope === "freeAgents" ? (
+                        <UserCheck className="size-3.5 text-primary" />
+                    ) : (
+                        <User className="size-3.5 text-muted" />
+                    )}
+                    <span className={cn(
+                        "text-xs font-semibold uppercase tracking-wider",
+                        scope === "freeAgents" ? "text-primary" : "text-muted",
+                    )}>
+                        {scope === "freeAgents" ? "Free Agents" : "Players"}
                     </span>
                     <span className="text-xs text-muted ml-auto">{filteredPlayers.length}</span>
                 </div>
 
                 {filteredPlayers.length === 0 ? (
-                    <p className="px-4 py-4 text-sm text-muted">No players found.</p>
+                    <p className="px-4 py-4 text-sm text-muted">
+                        {scope === "freeAgents" ? "No free agents match your filters." : "No players found."}
+                    </p>
                 ) : (
                     <div className="divide-y divide-edge">
                         {filteredPlayers.map(player => (

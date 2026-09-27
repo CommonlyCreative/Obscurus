@@ -103,7 +103,7 @@ export type CreateOrganizationInput = {
 };
 
 export type CreatePlaceholderPlayerInput = {
-  email: Scalars['String']['input'];
+  email?: InputMaybe<Scalars['String']['input']>;
   name: Scalars['String']['input'];
 };
 
@@ -119,6 +119,7 @@ export type CreateScrimmageInput = {
   partyCode?: InputMaybe<Scalars['String']['input']>;
   scheduledAt?: InputMaybe<Scalars['Timestamp']['input']>;
   team: Array<Scalars['String']['input']>;
+  teamName?: InputMaybe<Scalars['String']['input']>;
   wagerAmount?: InputMaybe<Scalars['Int']['input']>;
 };
 
@@ -225,6 +226,8 @@ export type LogStripeEventInput = {
 export type Match = {
   __typename?: 'Match';
   concludedAt?: Maybe<Scalars['Timestamp']['output']>;
+  draftData?: Maybe<Scalars['String']['output']>;
+  draftLink?: Maybe<Scalars['String']['output']>;
   match_id?: Maybe<Scalars['String']['output']>;
   number: Scalars['Int']['output'];
   result?: Maybe<MatchResult>;
@@ -262,6 +265,7 @@ export type Mutation = {
   cancelSubstituteRequest?: Maybe<SubstituteRequest>;
   createArtificialScrimmage?: Maybe<Scrimmage>;
   createCustomer?: Maybe<Customer>;
+  createMatchDraft?: Maybe<Scrimmage>;
   createOrganization?: Maybe<Organization>;
   createPlaceholderPlayer?: Maybe<OrganizationMember>;
   createPlaceholderUser?: Maybe<User>;
@@ -278,6 +282,8 @@ export type Mutation = {
   leaveScrimmage?: Maybe<Scrimmage>;
   logStripeEvent?: Maybe<StripeEvent>;
   logTransaction?: Maybe<Transaction>;
+  mergeOrganizations?: Maybe<Organization>;
+  mergeUsers?: Maybe<User>;
   placeWager?: Maybe<Wager>;
   purchaseCredits?: Maybe<CreditPurchase>;
   readyUp?: Maybe<Scrimmage>;
@@ -305,6 +311,7 @@ export type Mutation = {
   updateStripeEvent?: Maybe<StripeEvent>;
   updateTransaction?: Maybe<Transaction>;
   updateUser?: Maybe<User>;
+  uploadMatchDraft?: Maybe<Scrimmage>;
 };
 
 
@@ -390,6 +397,12 @@ export type MutationCreateArtificialScrimmageArgs = {
 
 export type MutationCreateCustomerArgs = {
   input: CustomerInput;
+};
+
+
+export type MutationCreateMatchDraftArgs = {
+  match_number: Scalars['Int']['input'];
+  scrimmage_id: Scalars['String']['input'];
 };
 
 
@@ -480,6 +493,18 @@ export type MutationLogStripeEventArgs = {
 
 export type MutationLogTransactionArgs = {
   transaction: TransactionInput;
+};
+
+
+export type MutationMergeOrganizationsArgs = {
+  fake_org_id: Scalars['String']['input'];
+  real_org_id: Scalars['String']['input'];
+};
+
+
+export type MutationMergeUsersArgs = {
+  fake_user_id: Scalars['String']['input'];
+  real_user_id: Scalars['String']['input'];
 };
 
 
@@ -644,6 +669,13 @@ export type MutationUpdateUserArgs = {
   user_id: Scalars['String']['input'];
 };
 
+
+export type MutationUploadMatchDraftArgs = {
+  draftData: Scalars['String']['input'];
+  match_number: Scalars['Int']['input'];
+  scrimmage_id: Scalars['String']['input'];
+};
+
 export type Notification = {
   __typename?: 'Notification';
   _id: Scalars['ID']['output'];
@@ -706,6 +738,7 @@ export type Organization = {
   members: Array<OrganizationMember>;
   name: Scalars['String']['output'];
   owner: User;
+  region: Scalars['String']['output'];
   slug: Scalars['String']['output'];
   updatedAt: Scalars['Timestamp']['output'];
 };
@@ -960,7 +993,6 @@ export type Scrimmage = {
   _id: Scalars['ID']['output'];
   bestOf: BestOf;
   createdAt: Scalars['Timestamp']['output'];
-  draftLink?: Maybe<Scalars['String']['output']>;
   host: User;
   hostOrg?: Maybe<Organization>;
   hostTeam: Team;
@@ -1241,6 +1273,7 @@ export type UpdateOrganizationInput = {
   description?: InputMaybe<Scalars['String']['input']>;
   logo?: InputMaybe<Scalars['String']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  region?: InputMaybe<Scalars['String']['input']>;
 };
 
 export type UpdateRosterSlotInput = {
@@ -1272,6 +1305,7 @@ export type UpdateUserInput = {
   heroes?: InputMaybe<Array<Scalars['Int']['input']>>;
   mmr?: InputMaybe<Scalars['Int']['input']>;
   name?: InputMaybe<Scalars['String']['input']>;
+  region?: InputMaybe<Scalars['String']['input']>;
   role?: InputMaybe<Role>;
   steam?: InputMaybe<SteamInput>;
   verified?: InputMaybe<Scalars['Boolean']['input']>;
@@ -1622,6 +1656,8 @@ export type DisputesResolvers<ContextType = Context, ParentType extends Resolver
 
 export type MatchResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Match'] = ResolversParentTypes['Match']> = ResolversObject<{
   concludedAt?: Resolver<Maybe<ResolversTypes['Timestamp']>, ParentType, ContextType>;
+  draftData?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
+  draftLink?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   match_id?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   number?: Resolver<ResolversTypes['Int'], ParentType, ContextType>;
   result?: Resolver<Maybe<ResolversTypes['MatchResult']>, ParentType, ContextType>;
@@ -1645,6 +1681,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   cancelSubstituteRequest?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationCancelSubstituteRequestArgs, 'request_id'>>;
   createArtificialScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCreateArtificialScrimmageArgs, 'input'>>;
   createCustomer?: Resolver<Maybe<ResolversTypes['Customer']>, ParentType, ContextType, RequireFields<MutationCreateCustomerArgs, 'input'>>;
+  createMatchDraft?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationCreateMatchDraftArgs, 'match_number' | 'scrimmage_id'>>;
   createOrganization?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationCreateOrganizationArgs, 'input' | 'owner_id'>>;
   createPlaceholderPlayer?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationCreatePlaceholderPlayerArgs, 'input' | 'orgRole' | 'org_id'>>;
   createPlaceholderUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationCreatePlaceholderUserArgs, 'input'>>;
@@ -1661,6 +1698,8 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   leaveScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationLeaveScrimmageArgs, 'scrimmage_id'>>;
   logStripeEvent?: Resolver<Maybe<ResolversTypes['StripeEvent']>, ParentType, ContextType, RequireFields<MutationLogStripeEventArgs, 'input'>>;
   logTransaction?: Resolver<Maybe<ResolversTypes['Transaction']>, ParentType, ContextType, RequireFields<MutationLogTransactionArgs, 'transaction'>>;
+  mergeOrganizations?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationMergeOrganizationsArgs, 'fake_org_id' | 'real_org_id'>>;
+  mergeUsers?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationMergeUsersArgs, 'fake_user_id' | 'real_user_id'>>;
   placeWager?: Resolver<Maybe<ResolversTypes['Wager']>, ParentType, ContextType, RequireFields<MutationPlaceWagerArgs, 'input'>>;
   purchaseCredits?: Resolver<Maybe<ResolversTypes['CreditPurchase']>, ParentType, ContextType, RequireFields<MutationPurchaseCreditsArgs, 'input'>>;
   readyUp?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationReadyUpArgs, 'scrimmage_id' | 'side'>>;
@@ -1688,6 +1727,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   updateStripeEvent?: Resolver<Maybe<ResolversTypes['StripeEvent']>, ParentType, ContextType, RequireFields<MutationUpdateStripeEventArgs, 'status' | 'stripe_event_id'>>;
   updateTransaction?: Resolver<Maybe<ResolversTypes['Transaction']>, ParentType, ContextType, RequireFields<MutationUpdateTransactionArgs, 'input' | 'transaction_id'>>;
   updateUser?: Resolver<Maybe<ResolversTypes['User']>, ParentType, ContextType, RequireFields<MutationUpdateUserArgs, 'input' | 'user_id'>>;
+  uploadMatchDraft?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationUploadMatchDraftArgs, 'draftData' | 'match_number' | 'scrimmage_id'>>;
 }>;
 
 export type NotificationResolvers<ContextType = Context, ParentType extends ResolversParentTypes['Notification'] = ResolversParentTypes['Notification']> = ResolversObject<{
@@ -1727,6 +1767,7 @@ export type OrganizationResolvers<ContextType = Context, ParentType extends Reso
   members?: Resolver<Array<ResolversTypes['OrganizationMember']>, ParentType, ContextType>;
   name?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   owner?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
+  region?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   slug?: Resolver<ResolversTypes['String'], ParentType, ContextType>;
   updatedAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
 }>;
@@ -1785,7 +1826,6 @@ export type ScrimmageResolvers<ContextType = Context, ParentType extends Resolve
   _id?: Resolver<ResolversTypes['ID'], ParentType, ContextType>;
   bestOf?: Resolver<ResolversTypes['BestOf'], ParentType, ContextType>;
   createdAt?: Resolver<ResolversTypes['Timestamp'], ParentType, ContextType>;
-  draftLink?: Resolver<Maybe<ResolversTypes['String']>, ParentType, ContextType>;
   host?: Resolver<ResolversTypes['User'], ParentType, ContextType>;
   hostOrg?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType>;
   hostTeam?: Resolver<ResolversTypes['Team'], ParentType, ContextType>;

@@ -1,12 +1,13 @@
 import { ArchiveListQuery } from "@/app/api/graphql/types/graphql";
 import { ArrayElement } from "@/lib/utils";
-import { Rank } from "@/lib/deadlock";
+import { Rank, REGIONS } from "@/lib/deadlock";
 
 export type ArchivedScrim = ArrayElement<ArchiveListQuery["getScrimmages"]>;
 
+export type Region = typeof REGIONS[number];
+
 export type MatchTypeFilter = "ANY" | "ORG" | "TEAM";
 export type ResultFilter = "ANY" | "HOST_WIN" | "OPPONENT_WIN" | "DRAW";
-export type Region = "NA" | "EU";
 
 export interface ArchiveFiltersState {
   playerSearch: string;
@@ -15,7 +16,7 @@ export interface ArchiveFiltersState {
   bestOfFilter: string;
   matchTypeFilter: MatchTypeFilter;
   resultFilter: ResultFilter;
-  regionFilter: Region | "All";
+  regionFilter: typeof REGIONS[number] | "All";
 }
 
 export const DEFAULT_ARCHIVE_FILTERS: ArchiveFiltersState = {

@@ -24,6 +24,7 @@ type Organization {
                                          # false = created from an approved org request (a real user's org)
     disbanded: Boolean!                 # true = soft-disbanded; the org record is kept as a tombstone
     disbandedAt: Timestamp              # Set when disbanded
+    region: String!                     # Region the org is based in (e.g. "NA", "EU", "ASIA"); set from the manage page
     createdAt: Timestamp!
     updatedAt: Timestamp!
 }
@@ -86,15 +87,19 @@ input CreateOrganizationInput {
 # A manager-created placeholder player — not yet signed up.
 # If a real user later signs in with Discord using this exact email, Better Auth's
 # implicit account linking adopts this same user document instead of creating a new one.
+# email is optional: if omitted, a fake, unclaimable placeholder address is generated
+# server-side (see UserDataSource.createManualUser) — an admin can set the real email
+# in later, once known, letting Discord sign-in claim the profile.
 input CreatePlaceholderPlayerInput {
     name: String!
-    email: String!
+    email: String
 }
 
 input UpdateOrganizationInput {
     name: String
     description: String
     logo: String
+    region: String
 }
 
 input AvailabilityBlockInput {
@@ -130,6 +135,15 @@ extend type Mutation {
     # orgs, and clears the owner's approved org request so they may request a new org.
     disbandOrganization(org_id: String!): Boolean
     transferOwnership(org_id: String!, new_owner_id: String!): Organization
+
+    # Admin-only: merges an admin-created artificial organization into the real one a
+    # user later made for the same team. Only every scrimmage fake_org_id hosted or
+    # played in is repointed to real_org_id (hostOrg/opponentOrg) — team rosters on
+    # those scrimmages are untouched, since the placeholder players on them get folded
+    # into their real profiles separately via mergeUsers. Neither organization record
+    # nor fake_org_id's roster is deleted or modified; the artificial org is left in
+    # place, still browsable/disbandable from the admin panel.
+    mergeOrganizations(real_org_id: String!, fake_org_id: String!): Organization
 
     # Membership — manager-only operations
     inviteMember(org_id: String!, user_id: String!, orgRole: OrgRole!): OrganizationMember

@@ -12,6 +12,7 @@ import {
     removeMemberAction,
     updateMemberRoleAction,
     updateMemberIsPlayerAction,
+    updateOrgRegionAction,
     fillWithFillers,
     disbandOrganizationAction,
     createPlaceholderPlayerAction,
@@ -44,6 +45,8 @@ import { UserPlus, UserRoundPlus } from "lucide-react";
 import type { ManagedOrg, OrgMemberEntry, OrgUserSearch } from "./types";
 import { authClient } from "@/lib/database/auth-client";
 
+const REGIONS = ["NA", "EU", "SA", "ASIA", "OCE"] as const;
+
 export function OrgManagePanel({
     org,
     users,
@@ -55,6 +58,10 @@ export function OrgManagePanel({
 }) {
     const { data: session } = authClient.useSession();
     const router = useRouter();
+
+    const [region, setRegion] = useState(org.region);
+    const [regionPending, startRegionTransition] = useTransition();
+    const [regionError, setRegionError] = useState<string | null>(null);
 
     const [coreTeamIds, setCoreTeamIds] = useState<Set<string>>(new Set(org.coreTeamIds));
     const [coreTeamPending, startCoreTeamTransition] = useTransition();
@@ -141,6 +148,21 @@ export function OrgManagePanel({
         });
     }
 
+    function handleSetRegion(next: string) {
+        if (next === region) return;
+        const previous = region;
+        setRegion(next);
+        setRegionError(null);
+        startRegionTransition(async () => {
+            try {
+                await updateOrgRegionAction(org._id, next);
+            } catch {
+                setRegion(previous);
+                setRegionError("Failed to update region. Please try again.");
+            }
+        });
+    }
+
     function handleInvite() {
         if (!inviteUser) return;
         setInviteError(null);
@@ -159,21 +181,26 @@ export function OrgManagePanel({
     function handleCreatePlayer() {
         setCreateError(null);
         setCreateSuccess(null);
-        if (!playerName.trim() || !playerEmail.trim()) {
-            setCreateError("Enter a name and email.");
+        if (!playerName.trim()) {
+            setCreateError("Enter a name.");
             return;
         }
         startCreateTransition(async () => {
             try {
+                const email = playerEmail.trim();
                 const created = await createPlaceholderPlayerAction(org._id, playerRole, {
                     name: playerName.trim(),
-                    email: playerEmail.trim(),
+                    email: email || undefined,
                 });
                 setMembers(prev => [...prev, created]);
                 setPlayerName("");
                 setPlayerEmail("");
                 setPlayerRole(OrgRole.Player);
-                setCreateSuccess(`${created.name} added to the roster. They can claim this profile later by signing in with Discord using ${playerEmail.trim()}.`);
+                setCreateSuccess(
+                    email
+                        ? `${created.name} added to the roster. They can claim this profile later by signing in with Discord using ${email}.`
+                        : `${created.name} added to the roster with a placeholder email. An admin can set their real email later so they can claim this profile via Discord.`
+                );
             } catch (e) {
                 setCreateError(e instanceof Error ? e.message : "Failed to create player.");
             }
@@ -269,6 +296,29 @@ export function OrgManagePanel({
 
     return (
         <div className="space-y-5">
+            {/* Region */}
+            <SectionCard title="Region" subtitle="The region this organization is based in.">
+                <div className="flex flex-wrap gap-1.5">
+                    {REGIONS.map((r) => (
+                        <button
+                            key={r}
+                            type="button"
+                            onClick={() => handleSetRegion(r)}
+                            disabled={regionPending}
+                            className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors disabled:opacity-60",
+                                region === r
+                                    ? "bg-primary text-background border-primary"
+                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20"
+                            )}
+                        >
+                            {r}
+                        </button>
+                    ))}
+                </div>
+                {regionError && <p className="text-xs text-danger mt-2">{regionError}</p>}
+            </SectionCard>
+
             {/* Create Player Manually */}
             <SectionCard
                 title="Create Player Manually"
@@ -285,7 +335,7 @@ export function OrgManagePanel({
                         />
                     </div>
                     <div>
-                        <label className="text-xs text-muted block mb-1">Email</label>
+                        <label className="text-xs text-muted block mb-1">Email <span className="text-muted/70">(optional)</span></label>
                         <input
                             type="email"
                             value={playerEmail}
@@ -296,7 +346,8 @@ export function OrgManagePanel({
                         <p className="text-[11px] text-muted mt-1">
                             Must match the email on the player&apos;s Discord account exactly. When they sign in with
                             Discord using this email, they&apos;ll automatically take over this exact profile —
-                            nothing needs to be re-entered.
+                            nothing needs to be re-entered. Leave blank to use a placeholder email for now — the
+                            profile stays unclaimable until an admin sets their real one.
                         </p>
                     </div>
                     <div>

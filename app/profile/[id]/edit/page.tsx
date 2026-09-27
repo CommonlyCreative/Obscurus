@@ -84,6 +84,7 @@ async function EditProfileData({
                 stats={profile.stats}
                 initialHeroes={profile.heroes}
                 initialBio={profile.bio ?? ""}
+                initialRegion={profile.region}
                 heroes={heroes.filter(hero => !hero.in_development && !hero.disabled).sort((a, b) => a.name.localeCompare(b.name))}
                 disconnectGoogleOnMount={sp.disconnect_google === "1"}
             />

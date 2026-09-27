@@ -18,6 +18,7 @@ export interface ManagedOrg {
     name: string;
     slug: string;
     ownerId: string;
+    region: string;
     members: OrgMemberEntry[];
     coreTeamIds: string[];
 }

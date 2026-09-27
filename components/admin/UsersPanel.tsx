@@ -140,7 +140,14 @@ export function UsersPanel({
             {/* ── Right: detail panel ── */}
             <div className="bg-surface border border-edge rounded-xl overflow-hidden max-h-[70vh] overflow-y-auto no-scrollbar sticky top-4">
                 {selectedId ? (
-                    <UserDetailPanel userId={selectedId} adminRole={adminRole} />
+                    <UserDetailPanel
+                        userId={selectedId}
+                        adminRole={adminRole}
+                        onMerged={(survivingUserId) => {
+                            setSelectedId(survivingUserId);
+                            router.refresh();
+                        }}
+                    />
                 ) : (
                     <div className="flex items-center justify-center h-48 text-muted text-sm">
                         Select a user to view details.

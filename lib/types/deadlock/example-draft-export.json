@@ -1,0 +1,130 @@
+[
+  {
+    "id": 1007361,
+    "team": "team1",
+    "type": "ban",
+    "heroId": 72,
+    "hero": "Billy",
+    "wasRandom": false
+  },
+  {
+    "id": 1007362,
+    "team": "team2",
+    "type": "ban",
+    "heroId": 15,
+    "hero": "Bebop",
+    "wasRandom": false
+  },
+  {
+    "id": 1007363,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 16,
+    "hero": "Calico",
+    "wasRandom": false
+  },
+  {
+    "id": 1007364,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 81,
+    "hero": "Celeste",
+    "wasRandom": false
+  },
+  {
+    "id": 1007365,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 1,
+    "hero": "Infernus",
+    "wasRandom": false
+  },
+  {
+    "id": 1007366,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 64,
+    "hero": "Drifter",
+    "wasRandom": false
+  },
+  {
+    "id": 1007367,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 52,
+    "hero": "Mirage",
+    "wasRandom": false
+  },
+  {
+    "id": 1007368,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 63,
+    "hero": "Mina",
+    "wasRandom": false
+  },
+  {
+    "id": 1007369,
+    "team": "team2",
+    "type": "ban",
+    "heroId": 14,
+    "hero": "Holliday",
+    "wasRandom": false
+  },
+  {
+    "id": 1007370,
+    "team": "team1",
+    "type": "ban",
+    "heroId": 10,
+    "hero": "Paradox",
+    "wasRandom": false
+  },
+  {
+    "id": 1007371,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 20,
+    "hero": "Ivy",
+    "wasRandom": false
+  },
+  {
+    "id": 1007372,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 12,
+    "hero": "Kelvin",
+    "wasRandom": false
+  },
+  {
+    "id": 1007373,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 4,
+    "hero": "Lady Geist",
+    "wasRandom": false
+  },
+  {
+    "id": 1007374,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 19,
+    "hero": "Shiv",
+    "wasRandom": false
+  },
+  {
+    "id": 1007375,
+    "team": "team2",
+    "type": "pick",
+    "heroId": 2,
+    "hero": "Seven",
+    "wasRandom": false
+  },
+  {
+    "id": 1007376,
+    "team": "team1",
+    "type": "pick",
+    "heroId": 67,
+    "hero": "Paige",
+    "wasRandom": false
+  }
+]

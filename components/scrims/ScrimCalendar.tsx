@@ -197,6 +197,12 @@ const STATUS_CONFIG = {
         dot: "bg-success",
         border: "border-l-success",
     },
+    READY: {
+        label: "Live",
+        pill: "text-success bg-success/10 border border-success/30",
+        dot: "bg-success",
+        border: "border-l-success",
+    },
     COMPLETED: {
         label: "Completed",
         pill: "text-muted bg-surface-2 border border-edge",

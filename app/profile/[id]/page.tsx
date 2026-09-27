@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { ProfileHeader } from "@/components/profile/ProfileHeader";
+import { HeroPool } from "@/components/profile/HeroPool";
 import { ProfileStats } from "@/components/profile/ProfileStats";
 import { ProfileOrgInvites } from "@/components/profile/ProfileOrgInvites";
 import { ProfileScrimInvites } from "@/components/profile/ProfileScrimInvites";
@@ -190,7 +191,6 @@ async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
         <>
             <ProfileHeader
                 profile={profile}
-                heroes={heroes.filter(hero => (profile.heroes ?? []).includes(hero.id))}
                 editHref={user?.id === profile._id ? `/profile/${profile._id}/edit` : undefined}
             />
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -211,6 +211,9 @@ async function ProfileContent({ params }: { params: Promise<{ id: string }> }) {
                     />
                 )}
                 <ProfileStats _id={profile._id} scrimmages={profile.scrimmages.filter(scrim => ![ScrimmageStatus.Active, ScrimmageStatus.Cancelled].includes(scrim.status))} />
+                <div className="mb-8">
+                    <HeroPool heroes={heroes.filter(hero => (profile.heroes ?? []).includes(hero.id))} />
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">
                     <div className="lg:col-span-2">
                         <TeamPanel

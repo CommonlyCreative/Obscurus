@@ -56,6 +56,15 @@ const CreatePlaceholderUserMutation = graphql(`
   }
 `);
 
+const MergeUsersMutation = graphql(`
+  mutation AdminMergeUsers($real_user_id: String!, $fake_user_id: String!) {
+    mergeUsers(real_user_id: $real_user_id, fake_user_id: $fake_user_id) {
+      _id
+      name
+    }
+  }
+`);
+
 const CreatePlaceholderPlayerMutation = graphql(`
   mutation AdminCreatePlaceholderPlayer($org_id: String!, $orgRole: OrgRole!, $input: CreatePlaceholderPlayerInput!) {
     createPlaceholderPlayer(org_id: $org_id, orgRole: $orgRole, input: $input) {
@@ -115,6 +124,15 @@ const AdminRemoveOrgMemberMutation = graphql(`
 const AdminDisbandOrganizationMutation = graphql(`
   mutation AdminDisbandOrganization($org_id: String!) {
     disbandOrganization(org_id: $org_id)
+  }
+`);
+
+const AdminMergeOrganizationsMutation = graphql(`
+  mutation AdminMergeOrganizations($real_org_id: String!, $fake_org_id: String!) {
+    mergeOrganizations(real_org_id: $real_org_id, fake_org_id: $fake_org_id) {
+      _id
+      name
+    }
   }
 `);
 
@@ -563,6 +581,19 @@ export async function adminDisbandOrganizationAction(orgId: string): Promise<voi
     revalidatePath("/admin/organizations");
 }
 
+export async function adminMergeOrganizationsAction(realOrgId: string, fakeOrgId: string): Promise<void> {
+    await requireRole([Role.Admin]);
+    if (realOrgId === fakeOrgId) throw new Error("Cannot merge an organization with itself");
+
+    const { mergeOrganizations: merged } = await grafbase.request(AdminMergeOrganizationsMutation, {
+        real_org_id: realOrgId,
+        fake_org_id: fakeOrgId,
+    });
+    if (!merged) throw new Error("Failed to merge organizations");
+
+    revalidatePath("/admin/organizations");
+}
+
 export async function adminSetCoreTeamAction(orgId: string, userIds: string[]): Promise<void> {
     await requireRole([Role.Admin]);
     await grafbase.request(AdminSetCoreTeamMutation, { org_id: orgId, user_ids: userIds });
@@ -646,6 +677,19 @@ export async function banUserAction(userId: string, reason?: string): Promise<vo
         { _id: new ObjectId(userId) },
         { $set: { banned: true, ...(reason ? { banReason: reason } : {}), updatedAt: Date.now() } },
     );
+    revalidatePath("/admin/users");
+}
+
+export async function mergeUsersAction(realUserId: string, fakeUserId: string): Promise<void> {
+    await requireRole([Role.Admin]);
+    if (realUserId === fakeUserId) throw new Error("Cannot merge a user with itself");
+
+    const { mergeUsers: merged } = await grafbase.request(MergeUsersMutation, {
+        real_user_id: realUserId,
+        fake_user_id: fakeUserId,
+    });
+    if (!merged) throw new Error("Failed to merge users");
+
     revalidatePath("/admin/users");
 }
 

@@ -1,8 +1,8 @@
 import { GraphQLScalarType, Kind } from "graphql";
 import { ObjectId, WithId } from "mongodb";
 import { DBCustomer } from "./datasources/customer";
-import { DBScrimmage, DBTeam } from "./datasources/scrimmage";
-import { DBUser } from "./datasources/user";
+import { DBScrimmage, DBTeam, ScrimmageDataSource } from "./datasources/scrimmage";
+import { DBUser, UserDataSource } from "./datasources/user";
 import { DBOrganization, DBOrganizationMember } from "./datasources/organization";
 import { DBStripeEvent } from "./datasources/stripe-event";
 import { DBWager, DBCreditTransaction, DBCreditPurchase } from "./datasources/wager";
@@ -18,7 +18,7 @@ import {
     OrgMemberStatus,
 } from "./server";
 import { asyncMap } from "@/lib/utils";
-import { getDeadlockRank } from "@/lib/actions/deadlockapi";
+import { getDeadlockRank, createStatlockerDraft } from "@/lib/actions/deadlockapi";
 import { fetchMatchMetadata } from "@/lib/actions/deadlockMatchCache";
 import { convertSteam32toSteam64, convertSteam64toSteam32, getRankByMMR } from "@/lib/deadlock";
 import { convertServerPatchToFullTree } from "next/dist/client/components/segment-cache/navigation";
@@ -40,6 +40,49 @@ const TimestampScalar = new GraphQLScalarType({
         throw new Error("Timestamp literal must be an integer");
     },
 });
+
+// Creates the Statlocker draft lobby for one match of a scrimmage, if that match
+// doesn't already have one — drafts are created per match, not per scrimmage, since
+// each game in a series gets its own picks/bans. Called from startMatch the moment a
+// new match is created, and from the manual createMatchDraft mutation as a retry path.
+// The per-match `draftLink` check makes this idempotent — whichever caller wins the
+// race persists it first, everyone else is a no-op — so at most one draft is ever
+// created per match regardless of how many clients (or retries) trigger it.
+async function ensureStatlockerDraft(
+    scrimmage: WithId<DBScrimmage>,
+    matchNumber: number,
+    dataSources: { scrimmages: ScrimmageDataSource; users: UserDataSource }
+): Promise<WithId<DBScrimmage>> {
+    const match = scrimmage.matches.find(m => m.number === matchNumber);
+    if (!match || match.draftLink) return scrimmage;
+    if (!scrimmage.opponentTeam) return scrimmage;
+
+    try {
+        const memberIds = [...scrimmage.hostTeam.members, ...scrimmage.opponentTeam.members].map(id => new ObjectId(id));
+        const roster = await dataSources.users.getUsers(memberIds).toArray();
+        const steam32sFor = (ids: string[]) => roster
+            .filter(u => ids.includes(u._id.toString()) && u.steam?.id)
+            .map(u => Number(convertSteam64toSteam32(u.steam!.id)));
+
+        const team1 = { name: scrimmage.hostTeam.name ?? "Host", accountIds: steam32sFor(scrimmage.hostTeam.members) };
+        const team2 = { name: scrimmage.opponentTeam.name ?? "Opponent", accountIds: steam32sFor(scrimmage.opponentTeam.members) };
+
+        const response = await createStatlockerDraft({
+            team1,
+            team2,
+            draftName: `${team1.name} vs ${team2.name} — Match ${matchNumber}`,
+            scrimmageId: scrimmage._id.toString(),
+            matchNumber,
+        });
+        if (!response?.draftUrl) return scrimmage;
+
+        const updated = await dataSources.scrimmages.setMatchDraftLink(scrimmage._id.toString(), matchNumber, response.draftUrl);
+        return updated ?? scrimmage;
+    } catch (error) {
+        console.error(`Failed to create Statlocker draft for scrimmage ${scrimmage._id} match ${matchNumber}`, error);
+        return scrimmage;
+    }
+}
 
 export const resolvers: Resolvers = {
 
@@ -63,6 +106,9 @@ export const resolvers: Resolvers = {
             } catch (error) {
                 throw new Error(`Failed to fetch scrimmages for user ${user._id}: ${error}`);
             }
+        },
+        region: (parent) => {
+            return parent.region ?? "NA"
         },
         stats: async (parent, _, { dataSources: { users } }) => {
             const user = parent as any as DBUser;
@@ -184,6 +230,10 @@ export const resolvers: Resolvers = {
         members: (parent) => {
             const org = parent as any as DBOrganization;
             return org.members as any as OrganizationMember[];
+        },
+        region: (parent) => {
+            const org = parent as any as DBOrganization;
+            return org.region ?? "NA";
         },
         coreTeam: async (parent, _, { dataSources: { users } }) => {
             const org = parent as any as DBOrganization;
@@ -431,15 +481,30 @@ export const resolvers: Resolvers = {
             return users.updateUserById(user_id, input) as any as Promise<User | null>;
         },
         createPlaceholderUser: async (_, { input }, { dataSources: { users } }) => {
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
+            if (input.email) {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
 
-            const existing = await users.getUserByEmail(input.email);
-            if (existing) throw new Error("A user with this email already exists");
+                const existing = await users.getUserByEmail(input.email);
+                if (existing) throw new Error("A user with this email already exists");
+            }
 
             return users.createManualUser(input) as any as User;
         },
         createCustomer: async (_, { input }, { dataSources: { customers } }) => {
             return customers.createCustomer(input) as any as Promise<Customer>;
+        },
+        mergeUsers: async (_, { real_user_id, fake_user_id }, { dataSources: { users, scrimmages } }) => {
+            if (real_user_id === fake_user_id) throw new Error("Cannot merge a user with itself");
+
+            const real = await users.getUser(real_user_id);
+            const fake = await users.getUser(fake_user_id);
+            if (!real) throw new Error("Real user not found");
+            if (!fake) throw new Error("Fake user not found");
+
+            await scrimmages.reassignUser(fake_user_id, real_user_id);
+            const merged = await users.mergeUsers(real, fake);
+
+            return merged as any as User;
         },
 
         // --- Scrimmages ---
@@ -497,7 +562,6 @@ export const resolvers: Resolvers = {
         leaveScrimmage: async (_, { scrimmage_id }, { dataSources: { scrimmages, users } }) => {
             const { members: ids, scrim } = await scrimmages.leaveScrimmage(scrimmage_id)
             if (ids) {
-                console.log("ids", ids)
                 for (const id of ids) {
                     try {
                         const obj = new ObjectId(id)
@@ -538,8 +602,30 @@ export const resolvers: Resolvers = {
         setPartyCode: async (_, { scrimmage_id, partyCode }, { dataSources: { scrimmages } }) => {
             return scrimmages.setPartyCode(scrimmage_id, partyCode) as any;
         },
-        startMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages } }) => {
-            return scrimmages.startMatch(scrimmage_id) as any as Promise<WithId<Scrimmage> | null>;
+        createMatchDraft: async (_, { scrimmage_id, match_number }, { dataSources: { scrimmages, users } }) => {
+            const scrimmage = await scrimmages.getScrimmage(scrimmage_id);
+            if (!scrimmage) throw new Error("Scrimmage not found");
+            if (scrimmage.status !== ScrimmageStatus.Active) throw new Error("Scrimmage must be ACTIVE to create a draft");
+            return ensureStatlockerDraft(scrimmage, match_number, { scrimmages, users }) as any;
+        },
+        uploadMatchDraft: async (_, { scrimmage_id, match_number, draftData }, { dataSources: { scrimmages } }) => {
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(draftData);
+            } catch {
+                throw new Error("draftData must be valid JSON");
+            }
+            if (!Array.isArray(parsed)) throw new Error("draftData must be a JSON array of draft actions");
+
+            return scrimmages.setMatchDraftData(scrimmage_id, match_number, JSON.stringify(parsed)) as any;
+        },
+        startMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages, users } }) => {
+            let scrimmage = await scrimmages.startMatch(scrimmage_id);
+            const newMatch = scrimmage?.matches[scrimmage.matches.length - 1];
+            if (scrimmage && newMatch) {
+                scrimmage = await ensureStatlockerDraft(scrimmage, newMatch.number, { scrimmages, users });
+            }
+            return scrimmage as any as Promise<WithId<Scrimmage> | null>;
         },
         cancelMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages } }) => {
             return scrimmages.cancelMatch(scrimmage_id) as any as Promise<WithId<Scrimmage> | null>;
@@ -639,14 +725,29 @@ export const resolvers: Resolvers = {
         transferOwnership: async (_, { org_id, new_owner_id }, { dataSources: { organizations } }) => {
             return organizations.transferOwnership(org_id, new_owner_id) as any as Promise<Organization | null>;
         },
+        mergeOrganizations: async (_, { real_org_id, fake_org_id }, { dataSources: { organizations, scrimmages } }) => {
+            if (real_org_id === fake_org_id) throw new Error("Cannot merge an organization with itself");
+
+            const real = await organizations.getOrganization(real_org_id);
+            const fake = await organizations.getOrganization(fake_org_id);
+            if (!real) throw new Error("Real organization not found");
+            if (!fake) throw new Error("Fake organization not found");
+            if (!fake.artificial) throw new Error("Only an artificial organization can be merged into another");
+
+            await scrimmages.reassignOrganization(fake_org_id, real_org_id);
+
+            return organizations.getOrganization(real_org_id) as any as Promise<Organization | null>;
+        },
         inviteMember: async (_, { org_id, user_id, orgRole }, { dataSources: { organizations } }) => {
             return organizations.inviteMember(org_id, user_id, orgRole) as any as Promise<OrganizationMember | null>;
         },
         createPlaceholderPlayer: async (_, { org_id, orgRole, input }, { dataSources: { organizations, users } }) => {
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
+            if (input.email) {
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email)) throw new Error("Enter a valid email address");
 
-            const existing = await users.getUserByEmail(input.email);
-            if (existing) throw new Error("A user with this email already exists — invite them instead of creating a new player");
+                const existing = await users.getUserByEmail(input.email);
+                if (existing) throw new Error("A user with this email already exists — invite them instead of creating a new player");
+            }
 
             const user = await users.createManualUser(input);
             const member = await organizations.addActiveMember(org_id, user._id.toString(), orgRole);

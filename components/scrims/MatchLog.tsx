@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useEffect, useState, useTransition } from "react";
 import { cn, formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
 import { MatchResult } from "@/app/api/graphql/types/graphql";
@@ -9,9 +9,12 @@ import {
     submitMatchResultAction,
     setPartyCodeAction,
     cancelMatchAction,
+    createMatchDraftAction,
+    uploadMatchDraftAction,
     getMatch,
 } from "@/app/scrims/[id]/actions";
 import MatchData from "./MatchData";
+import { MatchDraft } from "./MatchDraft";
 import { toast } from "sonner";
 import { Check, Copy } from "lucide-react";
 
@@ -21,6 +24,8 @@ interface Match {
     result?: MatchResult | null;
     startedAt: number;
     concludedAt?: number | null;
+    draftLink?: string | null;
+    draftData?: string | null;
 }
 
 export interface MatchLogPatch {
@@ -35,7 +40,10 @@ interface MatchLogProps {
     matches: Match[];
     partyCode?: string | null;
     isHostLeader: boolean;
-    canViewParyCode: boolean;
+    isOpponentLeader: boolean;
+    hostName: string;
+    opponentName: string;
+    canViewPartyCode: boolean;
     isActive: boolean;
     onPatch: (patch: MatchLogPatch) => void;
 }
@@ -61,14 +69,20 @@ export function MatchLog({
     matches,
     partyCode,
     isHostLeader,
+    isOpponentLeader,
+    hostName,
+    opponentName,
     isActive,
-    canViewParyCode,
+    canViewPartyCode,
     onPatch,
 }: MatchLogProps) {
     const [pendingStart, startTransition] = useTransition();
     const [pendingSubmit, submitTransition] = useTransition();
     const [pendingCancel, submitCancelTransition] = useTransition();
     const [pendingCode, codeTransition] = useTransition();
+    const [pendingDraft, draftTransition] = useTransition();
+    const [pendingDraftUpload, draftUploadTransition] = useTransition();
+    const canManageDraft = isHostLeader || isOpponentLeader;
 
     const [matchId, setMatchId] = useState("");
     const [hostTeamSide, setHostTeamSide] = useState<0 | 1 | null>(null);
@@ -86,8 +100,6 @@ export function MatchLog({
         ?? completedMatches[completedMatches.length - 1]
         ?? null;
 
-    // Test later: 77989671, 77990585
-
     async function handlePasteMatchId() {
         try {
             const text = await navigator.clipboard.readText();
@@ -97,7 +109,7 @@ export function MatchLog({
                 setMatchInputError("Invalid Match ID. Copy a valid numeric match ID from Deadlock and try again.");
                 return;
             }
-            if (completedMatches.some(match => match.match_id === trimmed)){
+            if (completedMatches.some(match => match.match_id === trimmed)) {
                 setMatchInputError(`Duplicate Match. This match has already been logged. [${trimmed}]`);
                 return;
             }
@@ -195,9 +207,33 @@ export function MatchLog({
         });
     }
 
+    function handleCreateMatchDraft(matchNumber: number) {
+        setError(null);
+        draftTransition(async () => {
+            try {
+                const data = await createMatchDraftAction(scrimmageId, matchNumber);
+                if (data) onPatch({ matches: data.matches });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to create draft");
+            }
+        });
+    }
+
+    function handleUploadMatchDraft(matchNumber: number, draftData: string) {
+        setError(null);
+        draftUploadTransition(async () => {
+            try {
+                const data = await uploadMatchDraftAction(scrimmageId, matchNumber, draftData);
+                if (data) onPatch({ matches: data.matches });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to upload draft");
+            }
+        });
+    }
+
     return (
         <div className="space-y-4">
-            {canViewParyCode ?
+            {canViewPartyCode ?
                 /* Party code */
                 <div className="bg-surface border border-edge rounded-lg p-4">
                     <div className="flex items-center justify-between mb-3">
@@ -266,6 +302,20 @@ export function MatchLog({
                         <span className="text-xs text-muted ml-auto">
                             Started {formatTimeAgo(new Date(activeMatch.startedAt))}
                         </span>
+                    </div>
+
+                    <div className="mb-3 pb-3 border-b border-edge">
+                        <MatchDraft
+                            match={activeMatch}
+                            hostName={hostName}
+                            opponentName={opponentName}
+                            canManage={canManageDraft}
+                            allowCreateLobby
+                            creatingDraft={pendingDraft}
+                            uploadingDraft={pendingDraftUpload}
+                            onCreateLobby={() => handleCreateMatchDraft(activeMatch.number)}
+                            onUploadDraft={(draftData) => handleUploadMatchDraft(activeMatch.number, draftData)}
+                        />
                     </div>
 
                     {isHostLeader && (
@@ -442,6 +492,21 @@ export function MatchLog({
                                     </span>
                                 )}
                             </div>
+
+                            <div className="px-4 pb-4">
+                                <MatchDraft
+                                    match={selectedMatch}
+                                    hostName={hostName}
+                                    opponentName={opponentName}
+                                    canManage={canManageDraft}
+                                    allowCreateLobby={false}
+                                    creatingDraft={false}
+                                    uploadingDraft={pendingDraftUpload}
+                                    onCreateLobby={() => {}}
+                                    onUploadDraft={(draftData) => handleUploadMatchDraft(selectedMatch.number, draftData)}
+                                />
+                            </div>
+
                             {selectedMatch.match_id ?
                                 <MatchData
                                     key={selectedMatch.match_id}

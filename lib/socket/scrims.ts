@@ -6,6 +6,8 @@ export interface ScrimPatchMatch {
     result: string | null;
     startedAt: number;
     concludedAt: number | null;
+    draftLink: string | null;
+    draftData: string | null;
 }
 
 export interface ScrimPatch {

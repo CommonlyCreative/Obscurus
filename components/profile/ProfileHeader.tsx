@@ -2,7 +2,6 @@ import { DiscordIcon } from "@/components/shared/DiscordIcon";
 import { Button } from "@/components/shared/Button";
 import { getRankByMMR, Rank } from "@/lib/deadlock";
 import { UserProfileQuery } from "@/app/api/graphql/types/graphql";
-import { DeadlockHero } from "@/lib/types/deadlock/heroes";
 import {
     Tooltip,
     TooltipContent,
@@ -14,10 +13,8 @@ import { getRankImage } from "@/lib/rankImage";
 export function ProfileHeader({
     profile,
     editHref,
-    heroes,
 }: {
     profile: NonNullable<UserProfileQuery["getUser"]>;
-    heroes: DeadlockHero[];
     editHref?: string;
 }) {
     const rank = getRankByMMR(profile.stats?.mmr ?? 0);
@@ -43,21 +40,7 @@ export function ProfileHeader({
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                            <h1 className="text-2xl font-black text-foreground">{profile.name}</h1>
-                            {heroes.length > 0 && (
-                                <span className="flex flex-wrap max-w-lg gap-2 text-xs text-muted font-medium px-2 py-0.5 bg-surface-2 rounded-full border border-edge">
-                                    {heroes.map((hero, x) => (
-                                        <Tooltip key={x}>
-                                            <TooltipTrigger><img className="w-6 h-6" src={hero.images.minimap_image_webp} /></TooltipTrigger>
-                                            <TooltipContent>
-                                                <p>{hero.name}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                    ))}
-                                </span>
-                            )}
-                        </div>
+                        <h1 className="text-2xl font-black text-foreground mb-1">{profile.name}</h1>
                         <p className="text-sm text-dimmed leading-relaxed max-w-lg">{profile.bio}</p>
                     </div>
                     {profile.stats?.mmr && rank && <Tooltip>

@@ -144,7 +144,7 @@ export class ScrimmageDataSource {
         const scrimmage: DBScrimmage = {
             _id: new ObjectId(),
             host: input.host_id,           // caller must set host in the resolver via context
-            hostTeam: { leader: clean.leader_id ?? input.host_id, members: clean.team ?? [] },
+            hostTeam: { name: clean.teamName, leader: clean.leader_id ?? input.host_id, members: clean.team ?? [] },
             region: "NA",
             status: initialStatus(input),
             isPrivate: input.isPrivate,
@@ -257,13 +257,17 @@ export class ScrimmageDataSource {
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Ready) throw new Error("Can only leave when status is READY");
         if (scrim.matches.some(m => !m.result)) throw new Error("Cannot leave while a match is in progress — forfeit instead");
+        const invitation = scrim.invitations.find(inv => inv.user === scrim.opponentTeam?.leader && inv.type === InvitationType.LeaderInvite)
 
+        if (invitation) 
+            invitation.status = InvitationStatus.Pending;
         const update = await this.patch(scrimmageId, {
             opponentOrg: undefined,
             opponentTeam: undefined,
             status: scrim.isPrivate ? ScrimmageStatus.Pending : ScrimmageStatus.Open,
             readyHost: false,
             readyOpponent: false,
+            invitations: scrim.invitations,
         });
 
         return { members: scrim.opponentTeam?.members, scrim: update };
@@ -278,9 +282,9 @@ export class ScrimmageDataSource {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Pending) throw new Error("No pending challenge to accept");
-        const invitation = scrim.invitations.find(inv => inv.user === user_id&&inv.type === InvitationType.LeaderInvite)
+        const invitation = scrim.invitations.find(inv => inv.user === user_id && inv.type === InvitationType.LeaderInvite)
 
-        if (!invitation)throw new Error("Only leaders can accept scrimmage challenges");
+        if (!invitation) throw new Error("Only leaders can accept scrimmage challenges");
 
         invitation.status = InvitationStatus.Accepted;
 
@@ -288,7 +292,7 @@ export class ScrimmageDataSource {
             ? ScrimmageStatus.Scheduling
             : ScrimmageStatus.Ready;
 
-            //TODO
+        //TODO
 
         return this.patch(scrimmageId, {
             opponentOrg: invitation.organization,
@@ -304,16 +308,16 @@ export class ScrimmageDataSource {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Pending) throw new Error("No pending challenge to decline");
-        const invitation = scrim.invitations.find(inv => inv.user === user_id&&inv.type === InvitationType.LeaderInvite)
+        const invitation = scrim.invitations.find(inv => inv.user === user_id && inv.type === InvitationType.LeaderInvite)
 
-        if (!invitation)throw new Error("Only leaders can decline scrimmage challenges");
+        if (!invitation) throw new Error("Only leaders can decline scrimmage challenges");
 
         invitation.status = InvitationStatus.Declined
 
         let status = ScrimmageStatus.Cancelled;
 
-        for (const invite of scrim.invitations){
-            if (invite.type === InvitationType.LeaderInvite&&invite.status === InvitationStatus.Pending) {
+        for (const invite of scrim.invitations) {
+            if (invite.type === InvitationType.LeaderInvite && invite.status === InvitationStatus.Pending) {
                 status = scrim.status;
             }
         }
@@ -422,6 +426,42 @@ export class ScrimmageDataSource {
             throw new Error("Cannot update party code on a finished scrimmage");
 
         return this.patch(scrimmageId, { partyCode });
+    }
+
+    // ── Statlocker draft ─────────────────────────────────────────────────────
+
+    async setMatchDraftLink(
+        scrimmageId: string,
+        matchNumber: number,
+        draftLink: string
+    ): Promise<WithId<DBScrimmage> | null> {
+        const scrim = await this.getScrimmage(scrimmageId);
+        if (!scrim) throw new Error("Scrimmage not found");
+        const matchIdx = scrim.matches.findIndex(m => m.number === matchNumber);
+        if (matchIdx === -1) throw new Error(`Match ${matchNumber} not found`);
+
+        await this.collection.updateOne(
+            { _id: new ObjectId(scrimmageId) },
+            { $set: { [`matches.${matchIdx}.draftLink`]: draftLink, updatedAt: now() } }
+        );
+        return this.getScrimmage(scrimmageId);
+    }
+
+    async setMatchDraftData(
+        scrimmageId: string,
+        matchNumber: number,
+        draftData: string
+    ): Promise<WithId<DBScrimmage> | null> {
+        const scrim = await this.getScrimmage(scrimmageId);
+        if (!scrim) throw new Error("Scrimmage not found");
+        const matchIdx = scrim.matches.findIndex(m => m.number === matchNumber);
+        if (matchIdx === -1) throw new Error(`Match ${matchNumber} not found`);
+
+        await this.collection.updateOne(
+            { _id: new ObjectId(scrimmageId) },
+            { $set: { [`matches.${matchIdx}.draftData`]: draftData, updatedAt: now() } }
+        );
+        return this.getScrimmage(scrimmageId);
     }
 
     // ── Match lifecycle ───────────────────────────────────────────────────────
@@ -571,7 +611,7 @@ export class ScrimmageDataSource {
         const status = scrim.matches.length > 0 ? ScrimmageStatus.Completed : ScrimmageStatus.Cancelled;
 
         let result = undefined;
-        
+
         if (status === ScrimmageStatus.Completed) {
             let hostWins = 0;
             let opponentWins = 0;
@@ -601,5 +641,48 @@ export class ScrimmageDataSource {
         values: UpdateScrimmageInput
     ): Promise<WithId<DBScrimmage> | null> {
         return this.patch(id, convertNullsToUndefined(values) as Partial<DBScrimmage>);
+    }
+
+    // ── Admin: user merge support ─────────────────────────────────────────────
+
+    // Repoints every scrimmage referencing oldUserId (as host, a team leader/member,
+    // or an invitation) to newUserId — used when an admin merges a duplicate account
+    // into another (see UserDataSource.mergeUsers). Runs across the whole collection,
+    // not just one user's scrimmage list, so history stays consistent everywhere.
+    async reassignUser(oldUserId: string, newUserId: string): Promise<void> {
+        await this.collection.updateMany({ host: oldUserId }, { $set: { host: newUserId } });
+
+        await this.collection.updateMany({ "hostTeam.leader": oldUserId }, { $set: { "hostTeam.leader": newUserId } });
+        await this.collection.updateMany(
+            { "hostTeam.members": oldUserId },
+            { $set: { "hostTeam.members.$[elem]": newUserId } },
+            { arrayFilters: [{ elem: oldUserId }] }
+        );
+
+        await this.collection.updateMany({ "opponentTeam.leader": oldUserId }, { $set: { "opponentTeam.leader": newUserId } });
+        await this.collection.updateMany(
+            { "opponentTeam.members": oldUserId },
+            { $set: { "opponentTeam.members.$[elem]": newUserId } },
+            { arrayFilters: [{ elem: oldUserId }] }
+        );
+
+        await this.collection.updateMany(
+            { "invitations.user": oldUserId },
+            { $set: { "invitations.$[elem].user": newUserId } },
+            { arrayFilters: [{ "elem.user": oldUserId }] }
+        );
+    }
+
+    // Admin: org merge support ─────────────────────────────────────────────
+
+    // Repoints every scrimmage's hostOrg/opponentOrg from oldOrgId to newOrgId — used
+    // when an admin merges an artificial organization into a real one (see
+    // OrganizationDataSource / the mergeOrganizations resolver). Team rosters
+    // (hostTeam/opponentTeam/invitations) are intentionally left alone; those
+    // player-level references get fixed up separately, per-player, via
+    // ScrimmageDataSource.reassignUser as each placeholder is claimed or merged.
+    async reassignOrganization(oldOrgId: string, newOrgId: string): Promise<void> {
+        await this.collection.updateMany({ hostOrg: oldOrgId }, { $set: { hostOrg: newOrgId } });
+        await this.collection.updateMany({ opponentOrg: oldOrgId }, { $set: { opponentOrg: newOrgId } });
     }
 }

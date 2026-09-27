@@ -67,6 +67,7 @@ async function SearchContent() {
         stats: user.stats,
         role: user.role as string,
         online: user.online as boolean,
+        region: user.region,
         heroes: ((user.heroes as number[]) ?? [])
             .map((id: number) => heroMap.get(id))
             .filter((h): h is NonNullable<ReturnType<typeof heroMap.get>> => h != null),

@@ -329,6 +329,8 @@ interface ScrimPatch {
         result: string | null;
         startedAt: number;
         concludedAt: number | null;
+        draftLink: string | null;
+        draftData: string | null;
     }>;
 }
 
@@ -349,6 +351,19 @@ function setupScrimSocket(_io: Server, socket: Socket) {
         socket.broadcast.to(`scrim:${scrimmageId}`).emit("scrim:refresh");
     });
 }
+
+// Relayed server-to-server from the Next.js process's Statlocker webhook route (see
+// lib/socket/draft.ts and app/api/statlocker/draft-events/[scrimmageId]/[matchNumber]/route.ts)
+// — that route has no access to this process's socket rooms otherwise. Broadcast to
+// everyone in the scrim room (not per-profile), so every viewer sees draft updates live,
+// not just whoever's request happened to create the draft.
+app.post("/statlocker/broadcast", (req, res) => {
+    const { scrimmageId, matchNumber, event } = req.body ?? {};
+    if (typeof scrimmageId !== "string") return res.status(400).json({ error: "scrimmageId must be a string" });
+
+    io.to(`scrim:${scrimmageId}`).emit("scrim:draft-event", { matchNumber, event });
+    return res.json({ ok: true });
+});
 
 // ─── Artificial opponent auto-ready ────────────────────────────────────────
 // Artificial (admin-created placeholder) opponent orgs have no real manager to

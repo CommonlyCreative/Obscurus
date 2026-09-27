@@ -15,6 +15,22 @@ const ReadyUpMutation = graphql(`
     }
 `);
 
+const CreateMatchDraftMutation = graphql(`
+    mutation CreateMatchDraft($scrimmage_id: String!, $match_number: Int!) {
+        createMatchDraft(scrimmage_id: $scrimmage_id, match_number: $match_number) {
+            _id matches { number result startedAt concludedAt match_id draftLink draftData }
+        }
+    }
+`);
+
+const UploadMatchDraftMutation = graphql(`
+    mutation UploadMatchDraft($scrimmage_id: String!, $match_number: Int!, $draftData: String!) {
+        uploadMatchDraft(scrimmage_id: $scrimmage_id, match_number: $match_number, draftData: $draftData) {
+            _id matches { number result startedAt concludedAt match_id draftLink draftData }
+        }
+    }
+`);
+
 const UnreadyMutation = graphql(`
     mutation Unready($scrimmage_id: String!, $side: MatchSide!) {
         unready(scrimmage_id: $scrimmage_id, side: $side) { _id readyHost readyOpponent status }
@@ -30,7 +46,7 @@ const SetPartyCodeMutation = graphql(`
 const StartMatchMutation = graphql(`
     mutation StartMatch($scrimmage_id: String!) {
         startMatch(scrimmage_id: $scrimmage_id) {
-            _id status matches { number result startedAt concludedAt match_id }
+            _id status matches { number result startedAt concludedAt match_id draftLink draftData }
         }
     }
 `);
@@ -38,7 +54,7 @@ const StartMatchMutation = graphql(`
 const CancelMatchMutation = graphql(`
     mutation CancelMatch($scrimmage_id: String!) {
         cancelMatch(scrimmage_id: $scrimmage_id) {
-            _id status matches { number result startedAt concludedAt match_id }
+            _id status matches { number result startedAt concludedAt match_id draftLink draftData }
         }
     }
 `);
@@ -56,7 +72,7 @@ const SubmitMatchResultMutation = graphql(`
             deadlock_match_id: $deadlock_match_id
             result: $result
         ) {
-            _id status result matches { number result startedAt concludedAt match_id }
+            _id status result matches { number result startedAt concludedAt match_id draftLink draftData }
         }
     }
 `);
@@ -64,7 +80,7 @@ const SubmitMatchResultMutation = graphql(`
 const ReconcileMatchResultMutation = graphql(`
     mutation ReconcileMatchResult($scrimmage_id: String!, $match_number: Int!) {
         reconcileMatchResult(scrimmage_id: $scrimmage_id, match_number: $match_number) {
-            _id status result matches { number result startedAt concludedAt match_id }
+            _id status result matches { number result startedAt concludedAt match_id draftLink draftData }
         }
     }
 `);
@@ -131,6 +147,23 @@ export async function readyUpAction(scrimmageId: string, side: MatchSide) {
         side,
     });
     return readyUp;
+}
+
+export async function createMatchDraftAction(scrimmageId: string, matchNumber: number) {
+    const { createMatchDraft } = await grafbase.request(CreateMatchDraftMutation, {
+        scrimmage_id: scrimmageId,
+        match_number: matchNumber,
+    });
+    return createMatchDraft;
+}
+
+export async function uploadMatchDraftAction(scrimmageId: string, matchNumber: number, draftData: string) {
+    const { uploadMatchDraft } = await grafbase.request(UploadMatchDraftMutation, {
+        scrimmage_id: scrimmageId,
+        match_number: matchNumber,
+        draftData,
+    });
+    return uploadMatchDraft;
 }
 
 export async function unreadyAction(scrimmageId: string, side: MatchSide) {

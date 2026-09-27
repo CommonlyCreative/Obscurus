@@ -6,7 +6,7 @@ import { useTeamSocket } from "@/hooks/useTeamSocket";
 const STATS: Stat[] = [
     { value: "142", label: "Active Teams" },
     { value: "38", label: "Open Scrims" },
-    { value: "3", label: "Regions" },
+    { value: "3", label: "REGIONS" },
     { value: "1,200+", label: "Registered Players" },
 ];
 
@@ -15,7 +15,7 @@ export function StatsBar({ scrims, players, orgs }: { scrims: number, players: n
     const stats = [
         { value: loading ? orgs : Object.entries(teams).length+orgs, label: "Active Teams" },
         { value: scrims, label: "Open Scrims" },
-        { value: "2", label: "Regions" },
+        { value: "2", label: "REGIONS" },
         { value: `${players}`, label: "Registered Players" },
     ]
     return (

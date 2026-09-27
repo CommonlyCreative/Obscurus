@@ -33,6 +33,7 @@ export interface CreateScrimPayload {
     isPrivate: boolean;
     wagerAmount: number;
     host_id: string;
+    teamName: string | null;
     leaderId: string | null;
     hostOrgId: string | null;
     roster: string[];

@@ -24,6 +24,8 @@ import {
 import { getRankImage } from "@/lib/rankImage";
 import Link from "next/link";
 
+const REGIONS = ["NA", "EU", "SA", "ASIA", "OCE"] as const;
+
 interface Props {
     userId: string;
     stats: NonNullable<EditProfilePageQuery["getUser"]>["stats"]
@@ -31,6 +33,7 @@ interface Props {
     heroes: DeadlockHero[];
     initialHeroes: number[];
     initialBio: string;
+    initialRegion: string;
     disconnectGoogleOnMount?: boolean;
 }
 
@@ -38,6 +41,7 @@ export function EditProfileForm({
     userId,
     initialHeroes,
     initialBio,
+    initialRegion,
     heroes,
     steam,
     stats,
@@ -53,6 +57,7 @@ export function EditProfileForm({
         new Set(initialHeroes)
     );
     const [bio, setBio] = useState(initialBio);
+    const [region, setRegion] = useState(initialRegion);
 
     const [syncPending, startSyncTransition] = useTransition();
     const [syncSuccess, setSyncSuccess] = useState(false);
@@ -77,8 +82,8 @@ export function EditProfileForm({
         setProfileSuccess(false);
         startTransition(async () => {
             try {
-                await updateProfileAction({ userId, heroes: Array.from(selectedHeroes), bio });
-                await authClient.updateUser({ heroes: Array.from(selectedHeroes), bio });
+                await updateProfileAction({ userId, heroes: Array.from(selectedHeroes), bio, region });
+                await authClient.updateUser({ heroes: Array.from(selectedHeroes), bio, region });
                 setProfileSuccess(true);
                 router.refresh();
             } catch {
@@ -114,7 +119,8 @@ export function EditProfileForm({
     useEffect(() => {
         setSelectedHeroes(new Set(initialHeroes));
         setBio(initialBio);
-    }, [initialHeroes, initialBio]);
+        setRegion(initialRegion);
+    }, [initialHeroes, initialBio, initialRegion]);
 
     const googleConnected = linkedAccounts.some(a => a.providerId === "google");
 
@@ -278,6 +284,27 @@ export function EditProfileForm({
                         &nbsp;to pull your rank
                     </p>
                 )}
+            </SectionCard>
+
+            {/* Region */}
+            <SectionCard title="Region" subtitle="The region you primarily play in.">
+                <div className="flex flex-wrap gap-1.5">
+                    {REGIONS.map((r) => (
+                        <button
+                            key={r}
+                            type="button"
+                            onClick={() => setRegion(r)}
+                            className={cn(
+                                "px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors",
+                                region === r
+                                    ? "bg-primary text-background border-primary"
+                                    : "border-edge text-muted hover:text-foreground hover:border-foreground/20"
+                            )}
+                        >
+                            {r}
+                        </button>
+                    ))}
+                </div>
             </SectionCard>
 
             {/* Heroes */}

@@ -65,6 +65,15 @@ const CreateScrimPageQuery = graphql(`
             }
         }
     }
+    getUsers {
+        _id
+        name
+        verified
+        organization {
+            _id
+            name
+        }
+    }
   }
 `);
 
@@ -94,7 +103,7 @@ async function CreateScrimData({ headersPromise }: { headersPromise: ReturnType<
     if (!session) redirect("/");
     const user = session.user as User;
 
-    const { getUser: userData, getOrganizations: orgs } = await grafbase.request(CreateScrimPageQuery, {
+    const { getUser: userData, getOrganizations: orgs, getUsers: allUsers } = await grafbase.request(CreateScrimPageQuery, {
         user_id: user.id,
     });
 
@@ -108,10 +117,17 @@ async function CreateScrimData({ headersPromise }: { headersPromise: ReturnType<
     const coreTeam: OrgMember[] = org?.members.filter(m => org.coreTeam.some(c => c._id === m.user._id)) ?? [];
     const activeMembers: OrgMember[] = org?.members.filter((m) => m.status === OrgMemberStatus.Active) ?? [];
 
+    // Substitute candidates: any verified, real player — free agents or players from
+    // other teams. Roster/leader exclusions are applied client-side in CreateScrimForm.
+    const substituteCandidates = (allUsers ?? [])
+        .filter((u) => u.verified)
+        .map((u) => ({ _id: u._id, name: u.name, organization: u.organization ?? null }));
+
     return (
         <CreateScrimForm
             userId={user.id}
             orgs={orgs}
+            allUsers={substituteCandidates}
             org={org ? { _id: org._id, name: org.name, coreTeam, members: activeMembers } : null}
             isManager={isManager}
         />
