@@ -493,7 +493,7 @@ export const resolvers: Resolvers = {
         createCustomer: async (_, { input }, { dataSources: { customers } }) => {
             return customers.createCustomer(input) as any as Promise<Customer>;
         },
-        mergeUsers: async (_, { real_user_id, fake_user_id }, { dataSources: { users, scrimmages } }) => {
+        mergeUsers: async (_, { real_user_id, fake_user_id }, { dataSources: { users, scrimmages, organizations } }) => {
             if (real_user_id === fake_user_id) throw new Error("Cannot merge a user with itself");
 
             const real = await users.getUser(real_user_id);
@@ -502,6 +502,15 @@ export const resolvers: Resolvers = {
             if (!fake) throw new Error("Fake user not found");
 
             await scrimmages.reassignUser(fake_user_id, real_user_id);
+
+            // mergeUsers only keeps fake's organization when real didn't already have one
+            // (see UserDataSource.mergeUsers) — in that case the org itself still has
+            // member/coreTeam/owner entries pointing at fake's soon-to-be-deleted _id, so
+            // repoint those to the surviving real user too.
+            if (!real.organization && fake.organization) {
+                await organizations.reassignUser(fake.organization, fake_user_id, real_user_id);
+            }
+
             const merged = await users.mergeUsers(real, fake);
 
             return merged as any as User;

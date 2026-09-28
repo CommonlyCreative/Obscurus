@@ -246,6 +246,38 @@ export class OrganizationDataSource {
         return result.modifiedCount > 0;
     }
 
+    // Repoints one member's user id within a single organization — used when an admin
+    // merges a duplicate account into another (see UserDataSource.mergeUsers) and the
+    // deleted account's organization is the one that carries over onto the surviving
+    // user. Guards against ending up with two member rows for the same person if the
+    // surviving user already had their own (unrelated) row in this org.
+    async reassignUser(org_id: ObjectId | string, oldUserId: string, newUserId: string): Promise<void> {
+        const org = await this.getOrganization(org_id);
+        if (!org) return;
+
+        const update: Record<string, unknown> = { updatedAt: Date.now() };
+        if (org.owner === oldUserId) update.owner = newUserId;
+        if (org.coreTeam.includes(oldUserId)) {
+            update.coreTeam = org.coreTeam.includes(newUserId)
+                ? org.coreTeam.filter(id => id !== oldUserId)
+                : org.coreTeam.map(id => (id === oldUserId ? newUserId : id));
+        }
+        await this.collection.updateOne({ _id: new ObjectId(org_id) }, { $set: update });
+
+        if (org.members.some(m => m.user === newUserId)) {
+            await this.collection.updateOne(
+                { _id: new ObjectId(org_id) },
+                { $pull: { members: { user: oldUserId } } }
+            );
+        } else {
+            await this.collection.updateOne(
+                { _id: new ObjectId(org_id) },
+                { $set: { "members.$[elem].user": newUserId } },
+                { arrayFilters: [{ "elem.user": oldUserId }] }
+            );
+        }
+    }
+
     async updateMemberRole(org_id: ObjectId | string, user_id: string, orgRole: OrgRole): Promise<DBOrganizationMember | null> {
         const org = await this.getOrganization(org_id);
         if (!org) return null;

@@ -44,8 +44,7 @@ import { InputGroupAddon } from "@/components/ui/input-group";
 import { UserPlus, UserRoundPlus } from "lucide-react";
 import type { ManagedOrg, OrgMemberEntry, OrgUserSearch } from "./types";
 import { authClient } from "@/lib/database/auth-client";
-
-const REGIONS = ["NA", "EU", "SA", "ASIA", "OCE"] as const;
+import { REGIONS } from "@/lib/deadlock";
 
 export function OrgManagePanel({
     org,

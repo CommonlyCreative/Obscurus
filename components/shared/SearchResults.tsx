@@ -16,7 +16,7 @@ import {
 import { ArrayElement, cn } from "@/lib/utils";
 import { SearchPageQuery } from "@/app/api/graphql/types/graphql";
 import { getRankImage } from "@/lib/rankImage";
-import { Rank } from "@/lib/deadlock";
+import { Rank, REGIONS } from "@/lib/deadlock";
 
 export type SearchPlayerData = {
     _id: string;
@@ -30,8 +30,7 @@ export type SearchPlayerData = {
     stats: ArrayElement<SearchPageQuery["getUsers"]>["stats"]
 };
 
-const REGIONS = ["All", "NA", "EU", "SA", "ASIA", "OCE"] as const;
-const RANK_TIERS = ["Any", ...Object.values(Rank).map(r => r.name)] as const;
+const RANK_TIERS = ["Any", ...Object.values(Rank).filter(r => r.ranking > 0).map(r => r.name)] as const;
 
 export type SearchOrgData = {
     _id: string;
@@ -57,7 +56,7 @@ export function SearchResults({
 }) {
     const [query, setQuery] = useState("");
     const [scope, setScope] = useState<"all" | "freeAgents">("all");
-    const [rankFilter, setRankFilter] = useState<string>("Any");
+    const [rankFilter, setRankFilter] = useState<string[] | "Any">("Any");
     const [regionFilter, setRegionFilter] = useState<string>("All");
     const [filtersOpen, setFiltersOpen] = useState(false);
     const q = query.toLowerCase();
@@ -79,7 +78,7 @@ export function SearchResults({
     const filteredPlayers = players.filter(p => {
         if (scope === "freeAgents" && p.orgName) return false;
         if (regionFilter !== "All" && p.region !== regionFilter) return false;
-        if (rankFilter !== "Any" && p.stats?.rank.name !== rankFilter) return false;
+        if (rankFilter !== "Any" && !rankFilter.includes(p.stats?.rank.name ?? '')) return false;
         if (q && !(p.name.toLowerCase().includes(q) || p.orgName?.toLowerCase().includes(q))) return false;
         return true;
     });
@@ -153,10 +152,14 @@ export function SearchResults({
                                     {RANK_TIERS.map(r => (
                                         <button
                                             key={r}
-                                            onClick={() => setRankFilter(r)}
+                                            onClick={() => setRankFilter(prev => {
+                                                if (r === "Any") return r;
+                                                if (prev === "Any") return [r];
+                                                return prev.includes(r) ? prev.length === 1 ? "Any" : prev.filter(rank => rank !== r) : [...prev, r]
+                                            })}
                                             className={cn(
                                                 "px-2.5 py-1 text-[11px] font-semibold rounded-full border transition-colors",
-                                                rankFilter === r
+                                                rankFilter.includes(r)
                                                     ? "bg-primary text-background border-primary"
                                                     : "border-edge text-muted hover:text-foreground hover:border-foreground/20",
                                             )}
@@ -170,7 +173,7 @@ export function SearchResults({
                             <div>
                                 <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Region</p>
                                 <div className="flex flex-wrap gap-1.5">
-                                    {REGIONS.map(r => (
+                                    {["All", ...REGIONS].map(r => (
                                         <button
                                             key={r}
                                             onClick={() => setRegionFilter(r)}

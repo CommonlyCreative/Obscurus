@@ -1,13 +1,13 @@
 "use client";
 
-import { Rank } from "@/lib/deadlock";
+import { Rank, REGIONS } from "@/lib/deadlock";
 import { cn } from "@/lib/utils";
 import { BestOf } from "@/app/api/graphql/types/graphql";
 import type { ArchiveFiltersState, MatchTypeFilter, Region, ResultFilter } from "./types";
 import { DEFAULT_ARCHIVE_FILTERS } from "./types";
 
 const RANKS: (Rank | "Any")[] = ["Any", ...Object.values(Rank)];
-const REGIONS: (Region | "All")[] = ["All", "NA", "EU"];
+const REGION_FILTERS: (Region | "All")[] = ["All", ...REGIONS];
 
 const BEST_OF_OPTIONS: { value: string; label: string }[] = [
     { value: "ANY", label: "Any" },
@@ -133,7 +133,7 @@ export function ArchivesFilters({ filters, onChange }: ArchivesFiltersProps) {
 
             <FilterSection label="Region">
                 <div className="flex flex-wrap gap-1.5">
-                    {REGIONS.map((r) => (
+                    {REGION_FILTERS.map((r) => (
                         <Pill key={r} active={filters.regionFilter === r} onClick={() => set("regionFilter", r)}>
                             {r}
                         </Pill>

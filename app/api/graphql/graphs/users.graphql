@@ -124,7 +124,9 @@ extend type Mutation {
     # user's name/email/steam/heroes win when both sides have a value; scrimmage
     # histories are concatenated; organization is filled from whichever side has
     # one, with the real user's winning if both do. Every scrimmage referencing
-    # fake_user_id is repointed to real_user_id, and the fake user document is
-    # deleted once the merge completes.
+    # fake_user_id is repointed to real_user_id. If fake's organization is the one
+    # that carries over (real had none of its own), that organization's member,
+    # core-team, and owner entries are repointed to real_user_id too. The fake user
+    # document is deleted once the merge completes.
     mergeUsers(real_user_id: String!, fake_user_id: String!): User
 }

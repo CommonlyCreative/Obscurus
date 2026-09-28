@@ -24,11 +24,11 @@ import {
     UserRow,
 } from "@/app/admin/actions";
 import { socket } from "@/lib/socket/socket-client";
+import { REGIONS } from "@/lib/deadlock";
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 const ROLES = ["MEMBER", "SUPPORT", "MODERATOR", "ADMIN"] as const;
-const REGIONS = ["NA", "EU", "SA", "ASIA", "OCE"] as const;
 
 const ACTIVE_STATUSES = new Set(["OPEN", "PENDING", "READY", "SCHEDULING", "SCHEDULED", "ACTIVE"]);
 

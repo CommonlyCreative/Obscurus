@@ -2,11 +2,12 @@
 import { useLiveTeams } from "@/hooks/useLiveTeams";
 import { StatItem, type Stat } from "./StatItem";
 import { useTeamSocket } from "@/hooks/useTeamSocket";
+import { REGIONS } from "@/lib/deadlock";
 
 const STATS: Stat[] = [
     { value: "142", label: "Active Teams" },
     { value: "38", label: "Open Scrims" },
-    { value: "3", label: "REGIONS" },
+    { value: "3", label: "Regions" },
     { value: "1,200+", label: "Registered Players" },
 ];
 
@@ -15,7 +16,7 @@ export function StatsBar({ scrims, players, orgs }: { scrims: number, players: n
     const stats = [
         { value: loading ? orgs : Object.entries(teams).length+orgs, label: "Active Teams" },
         { value: scrims, label: "Open Scrims" },
-        { value: "2", label: "REGIONS" },
+        { value: REGIONS.length, label: "Regions" },
         { value: `${players}`, label: "Registered Players" },
     ]
     return (

@@ -23,8 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { getRankImage } from "@/lib/rankImage";
 import Link from "next/link";
-
-const REGIONS = ["NA", "EU", "SA", "ASIA", "OCE"] as const;
+import { REGIONS } from "@/lib/deadlock";
 
 interface Props {
     userId: string;
