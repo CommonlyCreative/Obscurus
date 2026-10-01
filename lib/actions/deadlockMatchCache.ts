@@ -56,7 +56,7 @@ export async function fetchMatchMetadata(match_id: string): Promise<MatchLookupR
         // Most likely a match that hasn't concluded yet — recheck again soon
         // rather than caching a "not found" response for a long time.
         cacheLife("minutes");
-        return { errorMessage: `Match ${match_id} isn't available yet — it may still be in progress.` };
+        return { errorMessage: `Match ${match_id} isn't available yet — it may still be in progress. If match is concluded and still not showing, please ensure match is uploaded via Statlocker.` };
     }
 
     // A concluded match's data is immutable — cache effectively forever.

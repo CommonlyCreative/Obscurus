@@ -251,12 +251,20 @@ export class OrganizationDataSource {
     // deleted account's organization is the one that carries over onto the surviving
     // user. Guards against ending up with two member rows for the same person if the
     // surviving user already had their own (unrelated) row in this org.
+    //
+    // If the reassigned user was the org's owner and the org is artificial (admin-created
+    // with a placeholder owner — see adminCreateOrganizationAction), the org stops being
+    // artificial: a real, signed-in user now owns it, so it should behave like any org
+    // they created themselves — manageable, eligible as a host, etc.
     async reassignUser(org_id: ObjectId | string, oldUserId: string, newUserId: string): Promise<void> {
         const org = await this.getOrganization(org_id);
         if (!org) return;
 
         const update: Record<string, unknown> = { updatedAt: Date.now() };
-        if (org.owner === oldUserId) update.owner = newUserId;
+        if (org.owner === oldUserId) {
+            update.owner = newUserId;
+            if (org.artificial) update.artificial = false;
+        }
         if (org.coreTeam.includes(oldUserId)) {
             update.coreTeam = org.coreTeam.includes(newUserId)
                 ? org.coreTeam.filter(id => id !== oldUserId)

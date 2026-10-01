@@ -426,38 +426,44 @@ export function CreateScrimForm({ userId, org, isManager, orgs: orgsWithDisbande
                                 </div>
                             </div>
 
-                            {isPrivate && (
-                                /* Schedule */
-                                < div className="space-y-3 pt-2 border-t border-edge">
-                                    <h3 className="text-sm font-semibold text-foreground">Schedule</h3>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {([false, true] as const).map((sched) => (
-                                            <button
-                                                key={String(sched)}
-                                                type="button"
-                                                onClick={() => setScheduled(sched)}
-                                                className={cn(
-                                                    "py-2 rounded-lg border text-xs font-semibold transition-colors",
-                                                    scheduled === sched
-                                                        ? "border-primary/50 bg-primary/5 text-primary"
-                                                        : "border-edge text-muted hover:border-primary/30"
-                                                )}
-                                            >
-                                                {sched ? "Scheduled Time" : "ASAP"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                    {scheduled && (
-                                        <input
-                                            type="datetime-local"
-                                            value={scheduledDate}
-                                            onChange={(e) => setScheduledDate(e.target.value)}
-                                            min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
-                                            className="bg-surface-2 border border-edge rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
-                                        />
-                                    )}
+                            {/* Schedule — available for both public and private org-affiliated
+                                scrims. A public scrim with a scheduled time is org-only to join
+                                (see JoinScheduledScrim / joinScrimmage); ASAP public scrims stay
+                                open to any team as before. */}
+                            <div className="space-y-3 pt-2 border-t border-edge">
+                                <h3 className="text-sm font-semibold text-foreground">Schedule</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {([false, true] as const).map((sched) => (
+                                        <button
+                                            key={String(sched)}
+                                            type="button"
+                                            onClick={() => setScheduled(sched)}
+                                            className={cn(
+                                                "py-2 rounded-lg border text-xs font-semibold transition-colors",
+                                                scheduled === sched
+                                                    ? "border-primary/50 bg-primary/5 text-primary"
+                                                    : "border-edge text-muted hover:border-primary/30"
+                                            )}
+                                        >
+                                            {sched ? "Scheduled Time" : "ASAP"}
+                                        </button>
+                                    ))}
                                 </div>
-                            )}
+                                {!isPrivate && scheduled && (
+                                    <p className="text-xs text-muted">
+                                        Only organizations will be able to join this scheduled slot — not ad-hoc teams.
+                                    </p>
+                                )}
+                                {scheduled && (
+                                    <input
+                                        type="datetime-local"
+                                        value={scheduledDate}
+                                        onChange={(e) => setScheduledDate(e.target.value)}
+                                        min={new Date(Date.now() + 60_000).toISOString().slice(0, 16)}
+                                        className="bg-surface-2 border border-edge rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary/50 transition-colors"
+                                    />
+                                )}
+                            </div>
 
 
                         </div>

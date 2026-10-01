@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { MatchResult } from "@/app/api/graphql/types/graphql";
 import { useRouter } from "next/navigation";
 import { EnrichedPlayer, getMatchPlayersData } from "@/app/scrims/[id]/cache";
+import Link from "next/link";
 
 type TeamDisplay = {
     name: "Hidden King" | "Arch Mother"
@@ -72,7 +73,13 @@ function MatchData({
     if (!metadata) return <Loading />;
 
     if ("errorMessage" in metadata) {
-        return <p className="text-xs text-danger">{metadata.errorMessage}</p>;
+
+        return metadata.errorMessage.includes("Statlocker") ? 
+        <div className="text-xs text-danger flex gap-1">
+            <p className="text-xs text-danger">{metadata.errorMessage}</p>
+            <Link className="underline" href="https://statlocker.gg/deadlock-companion-app" target="_blank">Learn More</Link>
+        </div>
+        : <p className="text-xs text-danger">{metadata.errorMessage}</p>;
     }
 
     const hostTeam = result === MatchResult.HostWin

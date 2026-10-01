@@ -294,6 +294,7 @@ export type Mutation = {
   reviewOrgRequest?: Maybe<OrgRequest>;
   selectSubstitute?: Maybe<SubstituteRequest>;
   setCoreTeam?: Maybe<Organization>;
+  setMatchDraftLink?: Maybe<Scrimmage>;
   setOpponentRoster?: Maybe<Scrimmage>;
   setPartyCode?: Maybe<Scrimmage>;
   settleWagers: Array<Wager>;
@@ -477,7 +478,7 @@ export type MutationInviteMemberArgs = {
 export type MutationJoinScrimmageArgs = {
   org_id?: InputMaybe<Scalars['String']['input']>;
   scrimmage_id: Scalars['String']['input'];
-  team: Array<Scalars['String']['input']>;
+  team?: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
 
@@ -563,6 +564,13 @@ export type MutationSelectSubstituteArgs = {
 export type MutationSetCoreTeamArgs = {
   org_id: Scalars['String']['input'];
   user_ids: Array<Scalars['String']['input']>;
+};
+
+
+export type MutationSetMatchDraftLinkArgs = {
+  draftLink: Scalars['String']['input'];
+  match_number: Scalars['Int']['input'];
+  scrimmage_id: Scalars['String']['input'];
 };
 
 
@@ -1694,7 +1702,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   dismissNotification?: Resolver<Maybe<ResolversTypes['Boolean']>, ParentType, ContextType, RequireFields<MutationDismissNotificationArgs, 'notification_id' | 'user_id'>>;
   endScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationEndScrimmageArgs, 'scrimmage_id'>>;
   inviteMember?: Resolver<Maybe<ResolversTypes['OrganizationMember']>, ParentType, ContextType, RequireFields<MutationInviteMemberArgs, 'orgRole' | 'org_id' | 'user_id'>>;
-  joinScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationJoinScrimmageArgs, 'scrimmage_id' | 'team'>>;
+  joinScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationJoinScrimmageArgs, 'scrimmage_id'>>;
   leaveScrimmage?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationLeaveScrimmageArgs, 'scrimmage_id'>>;
   logStripeEvent?: Resolver<Maybe<ResolversTypes['StripeEvent']>, ParentType, ContextType, RequireFields<MutationLogStripeEventArgs, 'input'>>;
   logTransaction?: Resolver<Maybe<ResolversTypes['Transaction']>, ParentType, ContextType, RequireFields<MutationLogTransactionArgs, 'transaction'>>;
@@ -1710,6 +1718,7 @@ export type MutationResolvers<ContextType = Context, ParentType extends Resolver
   reviewOrgRequest?: Resolver<Maybe<ResolversTypes['OrgRequest']>, ParentType, ContextType, RequireFields<MutationReviewOrgRequestArgs, 'request_id' | 'status'>>;
   selectSubstitute?: Resolver<Maybe<ResolversTypes['SubstituteRequest']>, ParentType, ContextType, RequireFields<MutationSelectSubstituteArgs, 'request_id' | 'user_id'>>;
   setCoreTeam?: Resolver<Maybe<ResolversTypes['Organization']>, ParentType, ContextType, RequireFields<MutationSetCoreTeamArgs, 'org_id' | 'user_ids'>>;
+  setMatchDraftLink?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetMatchDraftLinkArgs, 'draftLink' | 'match_number' | 'scrimmage_id'>>;
   setOpponentRoster?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetOpponentRosterArgs, 'input'>>;
   setPartyCode?: Resolver<Maybe<ResolversTypes['Scrimmage']>, ParentType, ContextType, RequireFields<MutationSetPartyCodeArgs, 'partyCode' | 'scrimmage_id'>>;
   settleWagers?: Resolver<Array<ResolversTypes['Wager']>, ParentType, ContextType, RequireFields<MutationSettleWagersArgs, 'scrimmage_id'>>;

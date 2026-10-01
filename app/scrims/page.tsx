@@ -18,7 +18,10 @@ export default function ScrimsPage() {
     const [search, setSearch] = useState("");
     const [scrimmages, setScrimmages] = useState<ScrimListQuery["getScrimmages"] | undefined>(undefined)
 
-    const filtered = (scrimmages ?? []).filter(s => s.status === ScrimmageStatus.Open).filter((s) => {
+    // Scheduled scrims (public or private) live on the calendar, not this ASAP browse
+    // list — a public scrim with scheduledAt set is org-only to join and isn't meant
+    // to be picked up first-come-first-served here.
+    const filtered = (scrimmages ?? []).filter(s => s.status === ScrimmageStatus.Open && !s.scheduledAt).filter((s) => {
         const name = s.hostTeam.name ?? s.host.name +"'s Team";
         const mmrAvg = s.hostTeam.members.reduce((acc, user) => {
             acc += user.stats?.mmr ?? 0;
@@ -43,7 +46,7 @@ export default function ScrimsPage() {
 
     return (
         <main className="flex-1">
-            <ScrimsPageHeader totalOpen={scrimmages?.filter(scrim => scrim.status === ScrimmageStatus.Open).length ?? 0} />
+            <ScrimsPageHeader totalOpen={scrimmages?.filter(scrim => scrim.status === ScrimmageStatus.Open && !scrim.scheduledAt).length ?? 0} />
             <ScrimsFilters
                 search={search} setSearch={setSearch}
                 rankFilter={rankFilter} setRankFilter={setRankFilter}

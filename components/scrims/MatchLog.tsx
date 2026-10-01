@@ -11,6 +11,7 @@ import {
     cancelMatchAction,
     createMatchDraftAction,
     uploadMatchDraftAction,
+    setMatchDraftLinkAction,
     getMatch,
 } from "@/app/scrims/[id]/actions";
 import MatchData from "./MatchData";
@@ -82,6 +83,7 @@ export function MatchLog({
     const [pendingCode, codeTransition] = useTransition();
     const [pendingDraft, draftTransition] = useTransition();
     const [pendingDraftUpload, draftUploadTransition] = useTransition();
+    const [pendingDraftLink, draftLinkTransition] = useTransition();
     const canManageDraft = isHostLeader || isOpponentLeader;
 
     const [matchId, setMatchId] = useState("");
@@ -231,6 +233,18 @@ export function MatchLog({
         });
     }
 
+    function handleSetMatchDraftLink(matchNumber: number, draftLink: string) {
+        setError(null);
+        draftLinkTransition(async () => {
+            try {
+                const data = await setMatchDraftLinkAction(scrimmageId, matchNumber, draftLink);
+                if (data) onPatch({ matches: data.matches });
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Failed to save draft link");
+            }
+        });
+    }
+
     return (
         <div className="space-y-4">
             {canViewPartyCode ?
@@ -313,8 +327,10 @@ export function MatchLog({
                             allowCreateLobby
                             creatingDraft={pendingDraft}
                             uploadingDraft={pendingDraftUpload}
+                            settingDraftLink={pendingDraftLink}
                             onCreateLobby={() => handleCreateMatchDraft(activeMatch.number)}
                             onUploadDraft={(draftData) => handleUploadMatchDraft(activeMatch.number, draftData)}
+                            onSetDraftLink={(draftLink) => handleSetMatchDraftLink(activeMatch.number, draftLink)}
                         />
                     </div>
 
@@ -502,8 +518,10 @@ export function MatchLog({
                                     allowCreateLobby={false}
                                     creatingDraft={false}
                                     uploadingDraft={pendingDraftUpload}
+                                    settingDraftLink={false}
                                     onCreateLobby={() => {}}
                                     onUploadDraft={(draftData) => handleUploadMatchDraft(selectedMatch.number, draftData)}
+                                    onSetDraftLink={() => {}}
                                 />
                             </div>
 

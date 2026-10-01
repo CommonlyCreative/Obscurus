@@ -31,6 +31,14 @@ const UploadMatchDraftMutation = graphql(`
     }
 `);
 
+const SetMatchDraftLinkMutation = graphql(`
+    mutation SetMatchDraftLink($scrimmage_id: String!, $match_number: Int!, $draftLink: String!) {
+        setMatchDraftLink(scrimmage_id: $scrimmage_id, match_number: $match_number, draftLink: $draftLink) {
+            _id matches { number result startedAt concludedAt match_id draftLink draftData }
+        }
+    }
+`);
+
 const UnreadyMutation = graphql(`
     mutation Unready($scrimmage_id: String!, $side: MatchSide!) {
         unready(scrimmage_id: $scrimmage_id, side: $side) { _id readyHost readyOpponent status }
@@ -110,7 +118,7 @@ const DeclineChallengeMutation = graphql(`
 `);
 
 const JoinScrimmageM = graphql(`
-    mutation JoinScrimmage($scrimmage_id: String!, $org_id: String, $team: [String!]!) {
+    mutation JoinScrimmage($scrimmage_id: String!, $org_id: String, $team: [String!]) {
         joinScrimmage(scrimmage_id: $scrimmage_id, org_id: $org_id, team: $team) { _id status }
     }
 `);
@@ -164,6 +172,15 @@ export async function uploadMatchDraftAction(scrimmageId: string, matchNumber: n
         draftData,
     });
     return uploadMatchDraft;
+}
+
+export async function setMatchDraftLinkAction(scrimmageId: string, matchNumber: number, draftLink: string) {
+    const { setMatchDraftLink } = await grafbase.request(SetMatchDraftLinkMutation, {
+        scrimmage_id: scrimmageId,
+        match_number: matchNumber,
+        draftLink,
+    });
+    return setMatchDraftLink;
 }
 
 export async function unreadyAction(scrimmageId: string, side: MatchSide) {
@@ -233,10 +250,11 @@ export async function cancelScrimmageAction(scrimmageId: string) {
     return cancelScrimmage;
 }
 
-export async function joinScrimmageAction(scrimmageId: string, team: string[]) {
+export async function joinScrimmageAction(scrimmageId: string, team?: string[], orgId?: string) {
     const { joinScrimmage } = await grafbase.request(JoinScrimmageM, {
         scrimmage_id: scrimmageId,
         team,
+        org_id: orgId,
     });
     return joinScrimmage;
 }

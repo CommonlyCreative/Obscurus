@@ -27,6 +27,14 @@ function isValidDraftExport(value: unknown): value is StatlockerDraftAction[] {
     );
 }
 
+// Statlocker's team1/team2 don't always line up with our host/opponent — e.g. when the
+// lobby was created outside ensureStatlockerDraft (a manually pasted link), there's no
+// guarantee team1 was the host side. Flips every action's side so a leader can correct
+// a reversed upload without re-uploading the file.
+function swapDraftTeams(list: StatlockerDraftAction[]): StatlockerDraftAction[] {
+    return list.map((a) => ({ ...a, team: a.team === "team1" ? "team2" : "team1" }));
+}
+
 function HeroTile({ action }: { action: StatlockerDraftAction }) {
     const isBan = action.type === "ban";
     const image = getHeroImage(action.heroId);
@@ -117,6 +125,11 @@ export function DraftResults({
         }
     }
 
+    function handleSwapTeams() {
+        if (!actions) return;
+        onUpload(JSON.stringify(swapDraftTeams(actions)));
+    }
+
     const uploadControl = canUpload && (
         <div>
             <input
@@ -127,15 +140,28 @@ export function DraftResults({
                 disabled={pending}
                 className="hidden"
             />
-            <label
-                htmlFor={inputId}
-                className={cn(
-                    "inline-flex items-center gap-2 text-xs font-semibold transition-colors cursor-pointer",
-                    pending ? "opacity-50 pointer-events-none text-muted" : actions ? "text-muted hover:text-dimmed" : "px-3 py-1.5 rounded border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+            <div className="flex items-center gap-3">
+                <label
+                    htmlFor={inputId}
+                    className={cn(
+                        "inline-flex items-center gap-2 text-xs font-semibold transition-colors cursor-pointer",
+                        pending ? "opacity-50 pointer-events-none text-muted" : actions ? "text-muted hover:text-dimmed" : "px-3 py-1.5 rounded border border-primary/40 bg-primary/5 text-primary hover:bg-primary/10"
+                    )}
+                >
+                    {pending ? "Uploading…" : actions ? "Replace with a different file" : "Upload Draft JSON"}
+                </label>
+                {actions && (
+                    <button
+                        type="button"
+                        onClick={handleSwapTeams}
+                        disabled={pending}
+                        className="text-xs font-semibold text-muted hover:text-dimmed transition-colors disabled:opacity-50"
+                        title="Flip which side each team's picks/bans are shown under"
+                    >
+                        Swap Teams
+                    </button>
                 )}
-            >
-                {pending ? "Uploading…" : actions ? "Replace with a different file" : "Upload Draft JSON"}
-            </label>
+            </div>
             {uploadError && <p className="text-xs text-danger mt-1">{uploadError}</p>}
         </div>
     );

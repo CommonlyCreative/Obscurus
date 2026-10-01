@@ -49,6 +49,7 @@ export interface ScrimDetailProps {
     isOpponentMember: boolean;
     isOpponentOrgManager: boolean;
     isHostOrgManager: boolean;
+    isViewerOrgManager: boolean;
     hostOrgId: string | null;
     viewerOrgId: string | null;
     allUsers: SubstituteCandidate[];
@@ -125,7 +126,8 @@ export function ScrimDetail({
     hostOrgId: _hostOrgId,
     isOpponentOrgManager,
     isHostOrgManager,
-    viewerOrgId: _viewerOrgId,
+    isViewerOrgManager,
+    viewerOrgId,
     allUsers,
 }: ScrimDetailProps) {
     const router = useRouter();
@@ -275,34 +277,54 @@ export function ScrimDetail({
     const hostTeamSize = scrim.hostTeam?.members.length ?? 0;
     const oppTeamSize = scrim.opponentTeam?.members.length ?? 0;
     const liveTeamIds = liveTeam?.members.map((m) => m.userId) ?? [];
-    const canJoin = status === ScrimmageStatus.Open
+    const canJoin = status === ScrimmageStatus.Open && !scrim.scheduledAt
         && !isHost && !isHostMember && !isOpponentMember
         && liveTeamIds.length === 6;
 
     const showReadyCheck = !isFinished && userId && showReadyState;
-    const showJoin = status === ScrimmageStatus.Open && userId && !isHost && !isHostMember;
+    // Ad-hoc live-team join — ASAP public scrims only. Scheduled public scrims are
+    // org-only and use JoinScheduledScrim instead (see below).
+    const showJoin = status === ScrimmageStatus.Open && !scrim.scheduledAt && userId && !isHost && !isHostMember;
+    // Scheduled public scrim: any org manager can claim the open slot, then finalize
+    // their roster once it's SCHEDULING and opponentOrg is their own org. Visible to
+    // any eligible non-host visitor (mirrors showJoin) — the button itself is gated to
+    // org managers inside the panel, same "always show, sometimes disable" pattern.
+    const showJoinScheduled = status === ScrimmageStatus.Open && !!scrim.scheduledAt
+        && !!userId && !isHost && !isHostMember;
+    const showFinalizeOpponentRoster = status === ScrimmageStatus.Scheduling
+        && !!scrim.opponentOrg && scrim.opponentOrg._id === viewerOrgId
+        && !scrim.opponentTeam && isOpponentOrgManager;
     const canViewMatch = isHostMember || isOpponentMember || isHostLeader || isOpponentLeader || isOpponentOrgManager || isHostOrgManager;
     const canManageDraft = isHostLeader || isOpponentLeader || isHostOrgManager || isOpponentOrgManager;
     const showInvitation = myInvitation && !isFinished && !isActive && myInvitation.status === InvitationStatus.Pending;
     const showAcceptChallenge = status === ScrimmageStatus.Pending && myInvitation?.type === InvitationType.LeaderInvite && !!userId && myInvitation.status === InvitationStatus.Pending; //TODO;
     const isOrgChallenge = !!myInvitation && !!myInvitation.organization;
+    // Finalizing a publicly-joined scheduled scrim has no invitation to source org data
+    // from — pull the joining org's roster straight from scrim.opponentOrg instead
+    // (already set to this org once the join/claim step ran).
+    const isOrgRosterFlow = isOrgChallenge || showFinalizeOpponentRoster;
+    const activeRosterOrgMembers = isOrgChallenge
+        ? activeOrgMembers
+        : (showFinalizeOpponentRoster ? (scrim.opponentOrg?.members.filter(m => m.status === OrgMemberStatus.Active) ?? []) : []);
+    const rosterOrgId = isOrgChallenge ? myOrg?._id : (showFinalizeOpponentRoster ? scrim.opponentOrg?._id : undefined);
+    const rosterOrgName = isOrgChallenge ? myOrg?.name : (showFinalizeOpponentRoster ? scrim.opponentOrg?.name : undefined);
     const showActions = !isFinished && userId && (canEndEarly || ((isHost || (isOpponentLeader && status === ScrimmageStatus.Scheduled)) && !isActive));
-    const roster = isOrgChallenge ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
+    const roster = isOrgRosterFlow ? Array.from(selectedTeamIds) : Array.from(liveTeamIds);
 
     // Captain doesn't have to be one of the 6 players actually scheduled to play — the
     // accepter might be a manager handling logistics for someone else. Any active,
     // verified org member is eligible; unverified (admin-created stub) accounts are not.
-    const captainCandidates = isOrgChallenge
-        ? activeOrgMembers.filter(m => m.user.verified).map(m => ({ id: m.user._id, name: m.user.name }))
+    const captainCandidates = isOrgRosterFlow
+        ? activeRosterOrgMembers.filter(m => m.user.verified).map(m => ({ id: m.user._id, name: m.user.name }))
         : (liveTeam?.members ?? []).map(m => ({ id: m.userId, name: m.name }));
     const captainId = manualCaptainId && captainCandidates.some(c => c.id === manualCaptainId)
         ? manualCaptainId
         : (userId && captainCandidates.some(c => c.id === userId) ? userId : null);
 
-    // Substitutes — org challenges only. Free agents or players from other orgs the
-    // accepting org can add straight into an open roster slot; own-org members are
-    // picked from the roster grid above instead.
-    const substituteCandidates = allUsers.filter(u => !roster.includes(u._id) && u.organization?._id !== myOrg?._id && !scrim.hostTeam.members.some(m => m._id === u._id));
+    // Substitutes — org roster flows only. Free agents or players from other orgs the
+    // accepting/joining org can add straight into an open roster slot; own-org members
+    // are picked from the roster grid above instead.
+    const substituteCandidates = allUsers.filter(u => !roster.includes(u._id) && u.organization?._id !== rosterOrgId && !scrim.hostTeam.members.some(m => m._id === u._id));
     const activeExternalPicks = externalPicks.filter(p => roster.includes(p._id));
 
     const rankAverageMMR = getRankAverages();
@@ -450,6 +472,19 @@ export function ScrimDetail({
         if (!userId) return;
         setInviteStatus(InvitationStatus.Declined);
         handleAction(declineChallengeAction(scrim._id, userId));
+    }
+
+    // Claims an open slot on a scheduled public scrim for the viewer's org — no
+    // roster yet, just reserves it (status → SCHEDULING). The roster is finalized
+    // afterward via handleFinalizeRoster, once showFinalizeOpponentRoster is true.
+    function handleJoinAsOrg() {
+        if (!viewerOrgId) return;
+        handleAction(joinScrimmageAction(scrim._id, undefined, viewerOrgId));
+    }
+
+    function handleFinalizeRoster() {
+        if (!userId || !captainId) return;
+        handleAction(setOpponentRoster(scrim._id, captainId, roster, rosterOrgName ?? undefined));
     }
 
     function handleMatchLogPatch(patch: MatchLogPatch) {
@@ -668,6 +703,27 @@ export function ScrimDetail({
                         </div>
                     )}
 
+                    {/* Join as Org (scheduled public scrim) */}
+                    {showJoinScheduled && (
+                        <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
+                            <h3 className="text-xs font-semibold text-muted uppercase tracking-wider">Join Scrimmage</h3>
+                            <p className="text-xs text-dimmed leading-relaxed">
+                                This is a scheduled match — only organizations can join.{" "}
+                                {viewerOrgId && isViewerOrgManager
+                                    ? "Joining reserves this slot for your organization; you'll pick your 6-player roster next."
+                                    : viewerOrgId
+                                        ? "Only your organization's manager can join on its behalf."
+                                        : "You need to be a manager of an organization to join."}
+                            </p>
+                            {viewerOrgId && isViewerOrgManager && (
+                                <Button fullWidth disabled={pending} onClick={handleJoinAsOrg}>
+                                    {pending ? "Joining…" : "Join as Your Organization"}
+                                </Button>
+                            )}
+                            {error && <p className="text-xs text-danger">{error}</p>}
+                        </div>
+                    )}
+
                     {/* Ready Check */}
                     {showReadyCheck && (
                         <div className="bg-surface border border-edge rounded-lg p-4 space-y-3">
@@ -852,25 +908,33 @@ export function ScrimDetail({
                 </div>
             )}
 
-            {/* ── Accept Challenge (full-width, below grid) ── */}
-            {showAcceptChallenge && (
+            {/* ── Accept Challenge / Finalize Roster (full-width, below grid) ── */}
+            {(showAcceptChallenge || showFinalizeOpponentRoster) && (
                 <div className="bg-surface border border-edge rounded-lg p-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">Accept Challenge</h2>
-                            {isOrgChallenge && <p className="text-sm text-dimmed mt-1">Select your 6-player roster to accept this scrimmage.</p>}
+                            <h2 className="text-xs font-semibold text-muted uppercase tracking-wider">
+                                {showFinalizeOpponentRoster ? "Finalize Roster" : "Accept Challenge"}
+                            </h2>
+                            {isOrgRosterFlow && (
+                                <p className="text-sm text-dimmed mt-1">
+                                    {showFinalizeOpponentRoster
+                                        ? "You've claimed this scheduled scrimmage — select your organization's 6-player roster to confirm."
+                                        : "Select your 6-player roster to accept this scrimmage."}
+                                </p>
+                            )}
                         </div>
                         <span className={cn("text-sm font-bold", roster.length === 6 ? "text-success" : "text-muted")}>
                             {roster.length}/6
                         </span>
                     </div>
 
-                    {isOrgChallenge ? (
+                    {isOrgRosterFlow ? (
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                {activeOrgMembers.length === 0 ? (
+                                {activeRosterOrgMembers.length === 0 ? (
                                     <p className="text-xs text-muted italic col-span-3">No active members in this organization.</p>
-                                ) : activeOrgMembers.map(member => {
+                                ) : activeRosterOrgMembers.map(member => {
                                     const inTeam = selectedTeamIds.has(member.user._id);
                                     const disabled = !inTeam && selectedTeamIds.size >= 6;
                                     const stats = getRankByMMR(member.user.stats?.mmr ?? 0)
@@ -997,19 +1061,30 @@ export function ScrimDetail({
 
 
                     <div className="flex items-center gap-3">
-                        <Button
-                            onClick={handleAcceptChallenge}
-                            disabled={pending || roster.length < 6 || !captainId}
-                        >
-                            Accept Challenge
-                        </Button>
-                        <button
-                            onClick={handleDeclineChallenge}
-                            disabled={pending}
-                            className="px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
-                        >
-                            {pending ? "…" : "Decline"}
-                        </button>
+                        {showFinalizeOpponentRoster ? (
+                            <Button
+                                onClick={handleFinalizeRoster}
+                                disabled={pending || roster.length !== 6 || !captainId}
+                            >
+                                {pending ? "Confirming…" : "Confirm Roster"}
+                            </Button>
+                        ) : (
+                            <>
+                                <Button
+                                    onClick={handleAcceptChallenge}
+                                    disabled={pending || roster.length < 6 || !captainId}
+                                >
+                                    Accept Challenge
+                                </Button>
+                                <button
+                                    onClick={handleDeclineChallenge}
+                                    disabled={pending}
+                                    className="px-4 py-2 text-sm font-semibold rounded bg-danger/10 border border-danger/30 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50"
+                                >
+                                    {pending ? "…" : "Decline"}
+                                </button>
+                            </>
+                        )}
                         {error && <p className="text-xs text-danger ml-auto self-center">{error}</p>}
                     </div>
                 </div>

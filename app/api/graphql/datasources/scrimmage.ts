@@ -234,14 +234,26 @@ export class ScrimmageDataSource {
     async joinScrimmage(
         scrimmageId: string,
         orgId: string | undefined,
-        team: string[]
+        team: string[] | undefined
     ): Promise<WithId<DBScrimmage> | null> {
         const scrim = await this.getScrimmage(scrimmageId);
         if (!scrim) throw new Error("Scrimmage not found");
         if (scrim.status !== ScrimmageStatus.Open) throw new Error("Scrimmage is not open");
         if (scrim.opponentTeam) throw new Error("Scrimmage already has an opponent");
-        if (team.length !== 6) throw new Error("Team must have exactly 6 players");
 
+        // Scheduled public scrims are org-only: joining just reserves the slot
+        // (opponentOrg set, status → SCHEDULING) — the org finalizes its 6-player
+        // roster afterward via setOpponentRoster, mirroring the private/scheduled
+        // accept flow instead of requiring a roster up front.
+        if (scrim.scheduledAt) {
+            if (!orgId) throw new Error("Only organizations can join a scheduled scrimmage");
+            return this.patch(scrimmageId, {
+                opponentOrg: orgId,
+                status: ScrimmageStatus.Scheduling,
+            });
+        }
+
+        if (!team || team.length !== 6) throw new Error("Team must have exactly 6 players");
         return this.patch(scrimmageId, {
             opponentOrg: orgId,
             opponentTeam: { leader: team[0], members: team },

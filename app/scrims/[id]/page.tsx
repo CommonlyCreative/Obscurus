@@ -12,7 +12,14 @@ import { ArrayElement } from "@/lib/utils";
 const GetViewerOrgQuery = graphql(`
     query GetViewerOrg($user_id: String!) {
         getUser(user_id: $user_id) {
-            organization { _id }
+            organization {
+                _id
+                members {
+                    user { _id }
+                    orgRole
+                    status
+                }
+            }
         }
     }
 `);
@@ -72,6 +79,7 @@ const GetScrimmageQuery = graphql(`
                     user {
                         _id
                         name
+                        verified
                         stats { mmr }
                     }
                     status
@@ -154,6 +162,9 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
     const isHostOrgManager = scrim.hostOrg?.members.some(
         member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
     ) ?? false;
+    const isViewerOrgManager = viewerData?.getUser?.organization?.members.some(
+        member => member.user._id === user?.id && member.orgRole === OrgRole.Manager && member.status === OrgMemberStatus.Active
+    ) ?? false;
 
 
     return (
@@ -168,6 +179,7 @@ async function ScrimContent({ params }: { params: Promise<{ id: string }> }) {
             hostOrgId={scrim.hostOrg?._id ?? null}
             isOpponentOrgManager={isOpponentOrgManager}
             isHostOrgManager={isHostOrgManager}
+            isViewerOrgManager={isViewerOrgManager}
             viewerOrgId={viewerOrgId}
             allUsers={substituteCandidates}
         />

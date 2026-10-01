@@ -162,6 +162,20 @@ const CreateArtificialScrimmageMutation = graphql(`
   }
 `);
 
+const AdminAllUsersQuery = graphql(`
+  query AdminAllUsers {
+    getUsers {
+      _id
+      name
+      verified
+      organization {
+        _id
+        name
+      }
+    }
+  }
+`);
+
 // ─── DB types ──────────────────────────────────────────────────────────────
 
 type DBOrgRequest = {
@@ -608,6 +622,19 @@ export async function adminUpdateAvailabilityBlocksAction(
     await requireRole([Role.Admin]);
     await grafbase.request(AdminUpdateAvailabilityBlocksMutation, { org_id: orgId, blocks });
     revalidatePath("/admin/organizations");
+}
+
+// Substitute candidates for the admin artificial-scrim roster builder — any verified,
+// real player (free agent or on another team's roster), same pool CreateScrimForm
+// uses for its "Add a substitute" picker.
+export type AdminSubstituteCandidate = { _id: string; name: string; organization: { _id: string; name: string } | null };
+
+export async function getAdminSubstituteCandidatesAction(): Promise<AdminSubstituteCandidate[]> {
+    await requireRole([Role.Admin]);
+    const { getUsers } = await grafbase.request(AdminAllUsersQuery);
+    return (getUsers ?? [])
+        .filter((u) => u.verified)
+        .map((u) => ({ _id: u._id, name: u.name, organization: u.organization ?? null }));
 }
 
 // Admin-only: schedule a real org (host) against an artificial org (opponent) at a

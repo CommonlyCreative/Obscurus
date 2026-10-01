@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" fill="none">
+  <!-- Mark -->
+  <rect x="8" y="8" width="64" height="64" rx="12" fill="#e8bc87"/>
+  <path d="M40 26L52 33V47L40 54L28 47V33L40 26Z" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="40" cy="40" r="4" fill="#141414"/>
+
+  <!-- Wordmark -->
+  <text
+    x="92"
+    y="40"
+    dominant-baseline="central"
+    font-family="Arial, Helvetica, sans-serif"
+    font-weight="900"
+    font-size="34"
+    letter-spacing="5"
+    fill="#fafafa"
+  >OBSCURUS</text>
+</svg>

@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { auth, User } from "@/lib/database/auth";
 import { OrgRequestForm } from "@/components/org/OrgRequestForm";
-import { getMyOrgRequestAction } from "./actions";
+import { getMyOrgRequestAction, getMyOrganizationAction } from "./actions";
 
 export default function OrgRequestPage() {
     const headersPromise = headers();
@@ -39,8 +39,11 @@ async function OrgRequestData({ headersPromise }: { headersPromise: ReturnType<t
     if (!session) redirect("/");
     const user = session.user as User;
 
-    const existingRequest = await getMyOrgRequestAction(user.id);
-    return <OrgRequestForm userId={user.id} existingRequest={existingRequest} />;
+    const [existingRequest, currentOrg] = await Promise.all([
+        getMyOrgRequestAction(user.id),
+        getMyOrganizationAction(user.id),
+    ]);
+    return <OrgRequestForm userId={user.id} existingRequest={existingRequest} currentOrg={currentOrg} />;
 }
 
 function OrgRequestSkeleton() {

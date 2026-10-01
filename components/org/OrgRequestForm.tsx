@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/shared/Button";
-import { submitOrgRequestAction, cancelOrgRequestAction, type OrgRequestRecord } from "@/app/org/request/actions";
+import { submitOrgRequestAction, cancelOrgRequestAction, type OrgRequestRecord, type OrgRequestBlockingOrg } from "@/app/org/request/actions";
 
 const STATUS_CONFIG = {
     PENDING: {
@@ -28,9 +28,10 @@ function slugify(name: string): string {
 interface Props {
     userId: string;
     existingRequest: OrgRequestRecord | null;
+    currentOrg: OrgRequestBlockingOrg | null;
 }
 
-export function OrgRequestForm({ userId, existingRequest }: Props) {
+export function OrgRequestForm({ userId, existingRequest, currentOrg }: Props) {
     const router = useRouter();
     const [name, setName] = useState("");
     const [slug, setSlug] = useState("");
@@ -155,6 +156,34 @@ export function OrgRequestForm({ userId, existingRequest }: Props) {
                             </Button>
                         </div>
                     )}
+                </div>
+            </div>
+        );
+    }
+
+    // Already part of an organization — block the form until it's disbanded, since a
+    // user can only belong to one at a time.
+    if (currentOrg) {
+        return (
+            <div className="bg-surface border border-edge rounded-xl overflow-hidden">
+                <div className="px-6 py-5 border-b border-edge bg-surface-2">
+                    <p className="text-xs text-muted uppercase tracking-widest mb-1">Can't Request Yet</p>
+                    <h2 className="text-xl font-bold text-foreground">{currentOrg.name}</h2>
+                    <p className="text-sm text-dimmed mt-0.5 font-mono">[{currentOrg.slug}]</p>
+                </div>
+                <div className="px-6 py-5 space-y-4">
+                    <p className="text-sm text-dimmed leading-relaxed">
+                        {currentOrg.isManager
+                            ? "You're already managing an organization. Disband it before requesting a new one — an org can only ever have one owner, and you can only belong to one at a time."
+                            : "You're already a member of an organization. You'll need to leave or have your manager disband it before you can request a new one."}
+                    </p>
+                    <Button
+                        variant="secondary"
+                        href={currentOrg.isManager ? `/org/${currentOrg.slug}/manage` : `/org/${currentOrg.slug}`}
+                        className="text-xs"
+                    >
+                        {currentOrg.isManager ? "Go Disband Your Organization" : "View Your Organization"}
+                    </Button>
                 </div>
             </div>
         );

@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/database/auth";
 import { Role } from "@/app/api/graphql/server";
-import { getScrimmagesForAdminAction, getOrganizationsAdminAction } from "../actions";
+import { getScrimmagesForAdminAction, getOrganizationsAdminAction, getAdminSubstituteCandidatesAction } from "../actions";
 import { ScrimsPanel } from "@/components/admin/ScrimsPanel";
 import { AdminScheduleMatchPanel } from "@/components/admin/AdminScheduleMatchPanel";
 
@@ -41,10 +41,11 @@ async function ScrimmagesData({
 
     const scrims = await getScrimmagesForAdminAction();
     const organizations = role === "ADMIN" ? await getOrganizationsAdminAction() : null;
+    const allUsers = role === "ADMIN" ? await getAdminSubstituteCandidatesAction() : null;
 
     return (
         <div className="flex flex-col gap-4">
-            {organizations && <AdminScheduleMatchPanel organizations={organizations} />}
+            {organizations && allUsers && <AdminScheduleMatchPanel organizations={organizations} allUsers={allUsers} />}
             <ScrimsPanel scrims={scrims} adminRole={role} />
         </div>
     );

@@ -173,6 +173,12 @@ function thisWeek(dayOffset: number, hour: number, minute = 0): number {
 // ];
 
 const STATUS_CONFIG = {
+    OPEN: {
+        label: "Open",
+        pill: "text-success bg-success/10 border border-success/30",
+        dot: "bg-success",
+        border: "border-l-success",
+    },
     PENDING: {
         label: "Pending Invitation",
         pill: "text-yellow-400 bg-yellow-400/10 border border-yellow-400/30",
@@ -505,7 +511,7 @@ export function ScrimCalendar({ scrims }: { scrims: ScrimCalendarQuery["getScrim
 
             {/* Status legend */}
             <div className="flex items-center gap-4 mb-5">
-                {(Object.entries(STATUS_CONFIG) as [keyof typeof STATUS_CONFIG, typeof STATUS_CONFIG[keyof typeof STATUS_CONFIG]][]).map(([key, cfg]) => (
+                {(Object.entries(STATUS_CONFIG) as [keyof typeof STATUS_CONFIG, typeof STATUS_CONFIG[keyof typeof STATUS_CONFIG]][]).filter(s => s[0] !== ScrimmageStatus.Ready).map(([key, cfg]) => (
                     <div key={key} className="flex items-center gap-1.5">
                         <span className={cn("w-2 h-2 rounded-full", cfg.dot)} />
                         <span className="text-xs text-muted">{cfg.label}</span>

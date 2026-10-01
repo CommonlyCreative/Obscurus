@@ -1,15 +1,22 @@
 # Scrimmage schema
 #
 # Lifecycle:
-#   Public (non-scheduled):
-#     OPEN → (joinScrimmage) → READY → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
+#   Public, ASAP (non-scheduled):
+#     OPEN → (joinScrimmage, any team) → READY → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
+#
+#   Public, scheduled (scheduledAt set): only organizations may join, not ad-hoc live
+#   teams — joinScrimmage requires org_id and omits team, reserving the slot; the
+#   joining org finalizes its roster afterward via setOpponentRoster, same as the
+#   private/scheduled path below.
+#     OPEN → (joinScrimmage, org_id, no team) → SCHEDULING → (setOpponentRoster) → SCHEDULED
+#                → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
 #
 #   Private (non-scheduled):
 #     PENDING → (acceptScrimmageChallenge) → READY → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
 #     PENDING → (declineScrimmageChallenge) → CANCELLED
 #
-#   Scheduled (public or private):
-#     OPEN/PENDING → (accept) → SCHEDULING → (setOpponentRoster confirms) → SCHEDULED
+#   Private, scheduled:
+#     PENDING → (acceptScrimmageChallenge) → SCHEDULING → (setOpponentRoster confirms) → SCHEDULED
 #                → (both readyUp) → ACTIVE → COMPLETED | CANCELLED
 #
 # Match flow (within ACTIVE):
@@ -278,8 +285,12 @@ extend type Mutation {
     updateScrimmage(scrimmage_id: String!, input: UpdateScrimmageInput!): Scrimmage
     cancelScrimmage(scrimmage_id: String!): Scrimmage
 
-    # Public scrimmage: opponent org joins or leaves before a match starts
-    joinScrimmage(scrimmage_id: String!, org_id: String, team: [String!]!): Scrimmage
+    # Public scrimmage: opponent joins or leaves before a match starts. ASAP scrims
+    # (no scheduledAt) accept any 6-player team, org-affiliated or ad-hoc — org_id is
+    # optional there. Scheduled scrims (scheduledAt set) require org_id and no team —
+    # only organizations may claim a scheduled slot, and the roster is finalized
+    # afterward via setOpponentRoster, not at join time.
+    joinScrimmage(scrimmage_id: String!, org_id: String, team: [String!]): Scrimmage
     leaveScrimmage(scrimmage_id: String!): Scrimmage
 
     # Private scrimmage: only leaders can accept challenge
@@ -305,12 +316,17 @@ extend type Mutation {
     # Party code — host sets this; required before startMatch can be called
     setPartyCode(scrimmage_id: String!, partyCode: String!): Scrimmage
 
-    # Creates (or, if one already exists, just returns) the Statlocker draft lobby for a
-    # specific match — each match in the series gets its own draft. startMatch already
-    # triggers this automatically for the match it creates; this is a manual retry for
-    # when that automatic attempt failed (e.g. Statlocker was briefly unreachable).
-    # Idempotent per match: never creates a second draft for the same match.
+    # Creates a Statlocker draft lobby for a specific match — each match in the series
+    # gets its own draft. Nothing creates this automatically; a leader must press
+    # "Create Draft Lobby" (or call this) when they want one. A no-op if the match
+    # already has a draftLink (never overwrites an existing lobby, including one set
+    # manually via setMatchDraftLink).
     createMatchDraft(scrimmage_id: String!, match_number: Int!): Scrimmage
+
+    # Manually records a draft lobby link for a match — for when a leader already
+    # created the lobby themselves (e.g. directly on Statlocker) instead of using
+    # createMatchDraft. Overwrites any existing link for that match.
+    setMatchDraftLink(scrimmage_id: String!, match_number: Int!, draftLink: String!): Scrimmage
 
     # Statlocker doesn't reliably call back with draft results, so a leader manually
     # uploads that match's draft JSON export instead. Stored as-is for the record;

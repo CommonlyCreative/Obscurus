@@ -14,21 +14,11 @@ import {
     FloatingPortal,
 } from "@floating-ui/react";
 import { ChevronLeft, ChevronRight, MapPin, Calendar, ArrowUpRight, Gem } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ArrayElement, cn } from "@/lib/utils";
+import { ScrimmageStatus } from "@/app/api/graphql/server";
+import { OrgPageScrimsQuery } from "@/app/api/graphql/types/graphql";
 
-type OrgCalendarScrim = {
-    _id: string;
-    status: string;
-    scheduledAt?: number | null;
-    hostOrg?: { _id: string; name: string } | null;
-    opponentOrg?: { _id: string; name: string } | null;
-    hostTeam?: { name?: string | null; leader: { name: string } } | null;
-    opponentTeam?: { name?: string | null; leader: { name: string } } | null;
-    region: string;
-    bestOf?: string | null;
-    wagerAmount: number;
-    note?: string | null;
-};
+type OrgCalendarScrim = ArrayElement<NonNullable<OrgPageScrimsQuery["getOrgScrimmages"]>>
 
 const STATUS_CONFIG = {
     SCHEDULING: {
@@ -80,7 +70,7 @@ function getStatusConfig(status: string) {
     return STATUS_CONFIG[status as KnownStatus] ?? STATUS_CONFIG.COMPLETED;
 }
 
-function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim & { scheduledAt: number }; compact?: boolean }) {
+function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim; compact?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const cfg = getStatusConfig(scrim.status);
 
@@ -98,6 +88,7 @@ function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim & 
 
     const hover = useHover(context, { delay: { open: 250, close: 80 } });
     const focus = useFocus(context);
+    const timeRan = scrim.scheduledAt ?? scrim.createdAt;
     const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus]);
 
     const hostName = scrim.hostOrg?.name ?? scrim.hostTeam?.name ?? "Unknown";
@@ -120,7 +111,7 @@ function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim & 
                 {compact ? (
                     <>
                         <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
-                        <span className="text-[10px] text-muted shrink-0">{formatTime(scrim.scheduledAt)}</span>
+                        <span className="text-[10px] text-muted shrink-0">{formatTime(timeRan)}</span>
                         <span className="text-[10px] font-medium text-foreground truncate">{hostName}</span>
                     </>
                 ) : (
@@ -138,7 +129,7 @@ function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim & 
                         <p className="text-[10px] text-dimmed truncate mb-1.5">vs {opponentName}</p>
                         <div className="flex items-center gap-1.5">
                             <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
-                            <span className="text-[10px] text-muted">{formatTime(scrim.scheduledAt)}</span>
+                            <span className="text-[10px] text-muted">{formatTime(timeRan)}</span>
                             <span className="text-[10px] text-edge">·</span>
                             <span className="text-[10px] text-muted">{scrim.region}</span>
                         </div>
@@ -206,12 +197,12 @@ function ScrimEventCard({ scrim, compact = false }: { scrim: OrgCalendarScrim & 
                             <div className="flex items-center gap-2 text-xs text-dimmed">
                                 <Calendar className="w-3.5 h-3.5 text-muted shrink-0" />
                                 <span>
-                                    {new Date(scrim.scheduledAt).toLocaleDateString("en-US", {
+                                    {new Date(timeRan).toLocaleDateString("en-US", {
                                         weekday: "long",
                                         month: "long",
                                         day: "numeric",
                                     })}{" "}
-                                    at {formatTime(scrim.scheduledAt)}
+                                    at {formatTime(timeRan)}
                                 </span>
                             </div>
 
@@ -285,19 +276,18 @@ export function OrgScrimCalendar({ scrims }: { scrims: OrgCalendarScrim[] }) {
 
     const scheduledScrims = scrims.filter(
         s =>
-            s.scheduledAt != null &&
             s.status !== "CANCELLED" &&
             s.status !== "OPEN" &&
             s.status !== "PENDING" &&
             s.status !== "READY",
-    ) as (OrgCalendarScrim & { scheduledAt: number })[];
+    );
 
     const scrimsByDay = days.map(day => {
         const start = day.getTime();
         const end = start + 86_400_000;
         return scheduledScrims
-            .filter(s => s.scheduledAt >= start && s.scheduledAt < end)
-            .sort((a, b) => a.scheduledAt - b.scheduledAt);
+            .filter(s => (s.scheduledAt ?? s.createdAt >= start) && (s.scheduledAt ?? s.createdAt < end))
+            .sort((a, b) => (a.scheduledAt ?? a.createdAt) - (b.scheduledAt ?? b.createdAt));
     });
 
     const isToday = (d: Date) => d.toDateString() === new Date().toDateString();

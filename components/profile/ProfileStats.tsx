@@ -6,7 +6,7 @@ export function ProfileStats({ _id, scrimmages }: { _id: string; scrimmages: Non
         const isHost = scrim.hostTeam.members.some(m => m._id === _id);
         const hostWon = scrim.result === ScrimmageResult.HostWin;
         
-        if (isHost || !hostWon) {
+        if (isHost === hostWon) {
             acc.wins += 1;
         } else {
             acc.losses += 1;

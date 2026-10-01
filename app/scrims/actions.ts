@@ -24,6 +24,7 @@ const ScrimListPageQuery = graphql(`
       }
       status
       createdAt
+      scheduledAt
       region
       note
       bestOf

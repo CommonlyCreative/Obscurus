@@ -4,7 +4,8 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/shared/Button";
 import { BestOf } from "@/app/api/graphql/types/graphql";
-import { AdminOrgRow, adminCreateArtificialScrimAction } from "@/app/admin/actions";
+import { AdminOrgRow, AdminSubstituteCandidate, adminCreateArtificialScrimAction } from "@/app/admin/actions";
+import { SubstitutePicker } from "@/components/scrims/SubstitutePicker";
 import { cn } from "@/lib/utils";
 
 const BEST_OF_OPTIONS: BestOf[] = [BestOf.One, BestOf.Three, BestOf.Five, BestOf.Unlimited];
@@ -19,7 +20,7 @@ function minDateTimeLocal(): string {
     return new Date(Date.now()).toISOString().slice(0, 16);
 }
 
-export function AdminScheduleMatchPanel({ organizations }: { organizations: AdminOrgRow[] }) {
+export function AdminScheduleMatchPanel({ organizations, allUsers }: { organizations: AdminOrgRow[]; allUsers: AdminSubstituteCandidate[] }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
 
@@ -29,6 +30,7 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
     const [hostOrgId, setHostOrgId] = useState("");
     const [hostLeaderId, setHostLeaderId] = useState("");
     const [hostTeamIds, setHostTeamIds] = useState<Set<string>>(new Set());
+    const [hostSubstitutes, setHostSubstitutes] = useState<AdminSubstituteCandidate[]>([]);
     const [opponentTeamIds, setOpponentTeamIds] = useState<Set<string>>(new Set());
     const [opponentOrgId, setOpponentOrgId] = useState("");
     const [scheduledAt, setScheduledAt] = useState("");
@@ -45,9 +47,21 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
     const opponentActiveMembers = opponentOrg?.members.filter((m) => m.status === "ACTIVE" && m.isPlayer) ?? [];
     const opponentActiveCount = opponentActiveMembers.length;
 
+    const hostRosterSize = hostTeamIds.size + hostSubstitutes.length;
+
+    // Substitutes — free agents or players from other orgs the admin can slot in when
+    // the host org can't field 6 active members on its own. Mirrors CreateScrimForm's
+    // "Add a substitute" picker.
+    const hostSubstituteCandidates = allUsers.filter((u) =>
+        !hostTeamIds.has(u._id)
+        && !hostSubstitutes.some((s) => s._id === u._id)
+        && u.organization?._id !== hostOrgId
+    );
+
     function selectHostOrg(id: string) {
         setHostOrgId(id);
         setHostTeamIds(new Set());
+        setHostSubstitutes([]);
         const org = realOrgs.find((o) => o._id === id);
         setHostLeaderId(org?.ownerId ?? "");
     }
@@ -56,9 +70,18 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
         setHostTeamIds((prev) => {
             const next = new Set(prev);
             if (next.has(id)) next.delete(id);
-            else if (next.size < 6) next.add(id);
+            else if (hostRosterSize < 6) next.add(id);
             return next;
         });
+    }
+
+    function addHostSubstitute(candidate: AdminSubstituteCandidate) {
+        if (hostRosterSize >= 6) return;
+        setHostSubstitutes((prev) => [...prev, candidate]);
+    }
+
+    function removeHostSubstitute(id: string) {
+        setHostSubstitutes((prev) => prev.filter((s) => s._id !== id));
     }
 
     function toggleOpponentMember(id: string) {
@@ -74,6 +97,7 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
         setHostOrgId("");
         setHostLeaderId("");
         setHostTeamIds(new Set());
+        setHostSubstitutes([]);
         setOpponentTeamIds(new Set());
         setOpponentOrgId("");
         setScheduledAt("");
@@ -83,7 +107,7 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
         setCreated(null);
     }
 
-    const canSubmit = !!hostOrgId && !!hostLeaderId && hostTeamIds.size === 6 && opponentTeamIds.size === 6 && !!opponentOrgId && !!scheduledAt;
+    const canSubmit = !!hostOrgId && !!hostLeaderId && hostRosterSize === 6 && opponentTeamIds.size === 6 && !!opponentOrgId && !!scheduledAt;
 
     function handleSchedule() {
         if (!canSubmit) return;
@@ -93,7 +117,7 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
                 const result = await adminCreateArtificialScrimAction({
                     hostOrgId,
                     hostId: hostLeaderId,
-                    hostTeam: Array.from(hostTeamIds),
+                    hostTeam: [...Array.from(hostTeamIds), ...hostSubstitutes.map((s) => s._id)],
                     opponentOrgId,
                     opponentTeam: Array.from(opponentTeamIds),
                     scheduledAt: new Date(scheduledAt).getTime(),
@@ -176,8 +200,8 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
                             <div>
                                 <div className="flex items-center justify-between mb-1.5">
                                     <label className="text-[10px] text-muted uppercase tracking-wide">Host Roster</label>
-                                    <span className={cn("text-xs font-bold", hostTeamIds.size === 6 ? "text-success" : "text-muted")}>
-                                        {hostTeamIds.size}/6
+                                    <span className={cn("text-xs font-bold", hostRosterSize === 6 ? "text-success" : "text-muted")}>
+                                        {hostRosterSize}/6
                                     </span>
                                 </div>
                                 {hostActiveMembers.length === 0 ? (
@@ -186,7 +210,7 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
                                     <div className="grid grid-cols-2 gap-1.5">
                                         {hostActiveMembers.map((m) => {
                                             const selected = hostTeamIds.has(m._id);
-                                            const disabled = !selected && hostTeamIds.size >= 6;
+                                            const disabled = !selected && hostRosterSize >= 6;
                                             return (
                                                 <button
                                                     key={m._id}
@@ -206,6 +230,34 @@ export function AdminScheduleMatchPanel({ organizations }: { organizations: Admi
                                         })}
                                     </div>
                                 )}
+
+                                {hostSubstitutes.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                        {hostSubstitutes.map((s) => (
+                                            <button
+                                                key={s._id}
+                                                type="button"
+                                                onClick={() => removeHostSubstitute(s._id)}
+                                                className="px-2.5 py-1.5 rounded text-xs font-medium border border-primary/40 bg-primary/5 text-foreground flex items-center gap-1.5"
+                                                title="Remove substitute"
+                                            >
+                                                {s.name}
+                                                <span className="text-[9px] font-bold text-dimmed uppercase tracking-wider">Sub ✕</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="pt-2">
+                                    <p className="text-[11px] font-semibold text-muted mb-1">
+                                        Add a substitute — fills an open slot with a free agent or player from another team.
+                                    </p>
+                                    <SubstitutePicker
+                                        candidates={hostSubstituteCandidates}
+                                        disabled={hostRosterSize >= 6}
+                                        onAdd={addHostSubstitute}
+                                    />
+                                </div>
                             </div>
                         </>
                     )}

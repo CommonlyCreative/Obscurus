@@ -43,11 +43,10 @@ const TimestampScalar = new GraphQLScalarType({
 
 // Creates the Statlocker draft lobby for one match of a scrimmage, if that match
 // doesn't already have one — drafts are created per match, not per scrimmage, since
-// each game in a series gets its own picks/bans. Called from startMatch the moment a
-// new match is created, and from the manual createMatchDraft mutation as a retry path.
-// The per-match `draftLink` check makes this idempotent — whichever caller wins the
-// race persists it first, everyone else is a no-op — so at most one draft is ever
-// created per match regardless of how many clients (or retries) trigger it.
+// each game in a series gets its own picks/bans. This is never triggered automatically;
+// a leader explicitly presses "Create Draft Lobby" (createMatchDraft). The per-match
+// `draftLink` check makes this idempotent — it's also a no-op if a leader already set a
+// link manually via setMatchDraftLink, so this never clobbers a manually-pasted link.
 async function ensureStatlockerDraft(
     scrimmage: WithId<DBScrimmage>,
     matchNumber: number,
@@ -506,7 +505,8 @@ export const resolvers: Resolvers = {
             // mergeUsers only keeps fake's organization when real didn't already have one
             // (see UserDataSource.mergeUsers) — in that case the org itself still has
             // member/coreTeam/owner entries pointing at fake's soon-to-be-deleted _id, so
-            // repoint those to the surviving real user too.
+            // repoint those to the surviving real user too. If fake owned an artificial org,
+            // reassignUser also clears its artificial flag — a real user now owns it.
             if (!real.organization && fake.organization) {
                 await organizations.reassignUser(fake.organization, fake_user_id, real_user_id);
             }
@@ -563,10 +563,10 @@ export const resolvers: Resolvers = {
             return scrimmages.cancelScrimmage(scrimmage_id) as any;
         },
         joinScrimmage: async (_, { scrimmage_id, org_id, team }, { dataSources: { scrimmages, users } }) => {
-            team.forEach(member => {
+            team?.forEach(member => {
                 users.addScrimmageToUser(member, scrimmage_id)
             })
-            return scrimmages.joinScrimmage(scrimmage_id, org_id ?? undefined, team) as any;
+            return scrimmages.joinScrimmage(scrimmage_id, org_id ?? undefined, team ?? undefined) as any;
         },
         leaveScrimmage: async (_, { scrimmage_id }, { dataSources: { scrimmages, users } }) => {
             const { members: ids, scrim } = await scrimmages.leaveScrimmage(scrimmage_id)
@@ -617,6 +617,14 @@ export const resolvers: Resolvers = {
             if (scrimmage.status !== ScrimmageStatus.Active) throw new Error("Scrimmage must be ACTIVE to create a draft");
             return ensureStatlockerDraft(scrimmage, match_number, { scrimmages, users }) as any;
         },
+        setMatchDraftLink: async (_, { scrimmage_id, match_number, draftLink }, { dataSources: { scrimmages } }) => {
+            const scrimmage = await scrimmages.getScrimmage(scrimmage_id);
+            if (!scrimmage) throw new Error("Scrimmage not found");
+            if (scrimmage.status !== ScrimmageStatus.Active) throw new Error("Scrimmage must be ACTIVE to set a draft link");
+            const trimmed = draftLink.trim();
+            if (!trimmed) throw new Error("Draft link cannot be empty");
+            return scrimmages.setMatchDraftLink(scrimmage_id, match_number, trimmed) as any;
+        },
         uploadMatchDraft: async (_, { scrimmage_id, match_number, draftData }, { dataSources: { scrimmages } }) => {
             let parsed: unknown;
             try {
@@ -628,12 +636,11 @@ export const resolvers: Resolvers = {
 
             return scrimmages.setMatchDraftData(scrimmage_id, match_number, JSON.stringify(parsed)) as any;
         },
-        startMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages, users } }) => {
-            let scrimmage = await scrimmages.startMatch(scrimmage_id);
-            const newMatch = scrimmage?.matches[scrimmage.matches.length - 1];
-            if (scrimmage && newMatch) {
-                scrimmage = await ensureStatlockerDraft(scrimmage, newMatch.number, { scrimmages, users });
-            }
+        startMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages } }) => {
+            // Draft lobbies are no longer created automatically — a leader creates one
+            // (or pastes an existing link) from the match once it's live, via
+            // createMatchDraft / setMatchDraftLink.
+            const scrimmage = await scrimmages.startMatch(scrimmage_id);
             return scrimmage as any as Promise<WithId<Scrimmage> | null>;
         },
         cancelMatch: async (_, { scrimmage_id }, { dataSources: { scrimmages } }) => {
