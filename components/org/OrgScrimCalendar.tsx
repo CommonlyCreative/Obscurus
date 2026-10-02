@@ -286,8 +286,15 @@ export function OrgScrimCalendar({ scrims }: { scrims: OrgCalendarScrim[] }) {
         const start = day.getTime();
         const end = start + 86_400_000;
         return scheduledScrims
-            .filter(s => (s.scheduledAt ?? s.createdAt >= start) && (s.scheduledAt ?? s.createdAt < end))
-            .sort((a, b) => (a.scheduledAt ?? a.createdAt) - (b.scheduledAt ?? b.createdAt));
+            .filter(s => {
+                const ranAt = s.scheduledAt ?? s.createdAt;
+                return ranAt >= start && ranAt < end;
+            })
+            .sort((a, b) => {
+                const ranAtA = a.scheduledAt ?? a.createdAt;
+                const ranAtB = b.scheduledAt ?? b.createdAt;
+                return ranAtA - ranAtB;
+            });
     });
 
     const isToday = (d: Date) => d.toDateString() === new Date().toDateString();
