@@ -25,6 +25,7 @@ const HomePageQuery = graphql(`
     }
     getUsers {
         _id
+        verified
     }
     getOrganizations {
         _id
@@ -47,7 +48,7 @@ async function HomeContent() {
     const { getScrimmages: scrims, getUsers: users, getOrganizations: orgs } = await grafbase.request(HomePageQuery);
     return (
         <>
-            <HeroSection scrims={scrims.length} players={users.length} orgs={orgs?.filter(o => !o.disbanded).length ?? 0} />
+            <HeroSection scrims={scrims.length} players={users.filter(user => user.verified).length} orgs={orgs?.filter(o => !o.disbanded).length ?? 0} />
             <HowItWorksSection />
             <OpenScrimsSection scrims={scrims} />
             <CtaSection />
